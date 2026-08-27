@@ -6,6 +6,8 @@ const STORE_Q='questions';
 const STORE_P='progress';
 const STORE_M='meta';
 const LETTERS=['A','B','C','D'];
+const APP_VERSION='v4';
+const BUNDLED_PROF_URL='./data/professional-13900.json';
 const SECTION_NAMES=Object.fromEntries(SOURCES.professional.sections.map(([code,name])=>[code,name]));
 const COMMON_NAMES=Object.fromEntries(SOURCES.common.map(x=>[x.code,x.label]));
 const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei'}).format(new Date());
@@ -57,22 +59,45 @@ async function pdfToText(buffer,onProgress=()=>{}){
   return normalizeText(out);
 }
 function parseProfessionalText(raw){
-  const text=normalizeText(raw).replace(/13900\s*寵物美容\s*丙級/g,' 13900 寵物美容 丙級 ');
-  const headerRe=/13900\s*寵物美容\s*丙級\s*工作項目\s*(0[1-6])\s*[：:]\s*([^\d]+?)(?=\s+\d+\.\s*\([1-4]\))/g;
+  // PDF.js 對少數題目的括號、句點會拆成不同文字節點；解析時必須容許空格、全形符號與頁尾黏連。
+  const text=normalizeText(raw)
+    .replace(/13900\s*寵物美容\s*丙級/g,' 13900 寵物美容 丙級 ')
+    .replace(/[（]/g,'(').replace(/[）]/g,')').replace(/[．]/g,'.');
+  const marker='(\\d{1,3})\\s*\\.\\s*\\(\\s*([1-4])\\s*\\)';
+  const headerRe=new RegExp(`13900\\s*寵物美容\\s*丙級\\s*工作項目\\s*(0[1-6])\\s*[：:]\\s*([\\s\\S]*?)(?=\\s+${marker})`,'g');
   const headers=[];let m;
   while((m=headerRe.exec(text)))headers.push({code:m[1],name:normalizeText(m[2]),start:m.index,bodyStart:headerRe.lastIndex});
   const questions=[];
   for(let h=0;h<headers.length;h++){
     const sec=headers[h];const end=h+1<headers.length?headers[h+1].start:text.length;const body=text.slice(sec.bodyStart,end);
-    const qRe=/(\d{1,3})\.\s*\(([1-4])\)\s*([\s\S]*?)(?=\s+\d{1,3}\.\s*\([1-4]\)|$)/g;let q;
-    while((q=qRe.exec(body))){
-      const number=Number(q[1]),answer=Number(q[2]);const parts=q[3].split(/[①②③④]/);
+    // 先找每一題的起點，再依下一題起點切內容，比單一大型 regex 對 PDF 斷頁更穩。
+    const startRe=/(?:^|\s)(\d{1,3})\s*\.\s*\(\s*([1-4])\s*\)/g;
+    const starts=[];let sm;
+    while((sm=startRe.exec(body)))starts.push({number:Number(sm[1]),answer:Number(sm[2]),start:sm.index,contentStart:startRe.lastIndex});
+    const expected=Number((SOURCES.professional.sections.find(x=>x[0]===sec.code)||[])[2]||0);
+    for(let i=0;i<starts.length;i++){
+      const cur=starts[i];
+      // 題號超出該工作項目範圍通常是頁碼/內文數字被誤判，直接略過。
+      if(!cur.number || (expected && cur.number>expected)) continue;
+      const next=i+1<starts.length?starts[i+1].start:body.length;
+      const content=body.slice(cur.contentStart,next);
+      const parts=content.split(/[①②③④]/);
       let prompt=normalizeText(parts.shift());let options=parts.slice(0,4).map(normalizeText);
       if(options.length<4){options=[...options,...Array(4-options.length).fill('〔圖示／原題選項〕')];}
-      if(prompt&&number){questions.push({id:`13900-${sec.code}-${String(number).padStart(3,'0')}`,subjectCode:'13900',kind:'professional',section:sec.code,sectionName:SECTION_NAMES[sec.code]||sec.name,number,prompt,options,answer,source:'13900-public-pdf',active:true,imageLikely:options.some(x=>x==='〔圖示／原題選項〕')});}
+      if(prompt){questions.push({id:`13900-${sec.code}-${String(cur.number).padStart(3,'0')}`,subjectCode:'13900',kind:'professional',section:sec.code,sectionName:SECTION_NAMES[sec.code]||sec.name,number:cur.number,prompt,options,answer:cur.answer,source:'13900-public-pdf',active:true,imageLikely:options.some(x=>x==='〔圖示／原題選項〕')});}
     }
   }
   return dedupeQuestions(questions);
+}
+
+function professionalDiagnostics(qs){
+  const parts=[];
+  for(const [code,,expected] of SOURCES.professional.sections){
+    const nums=new Set(qs.filter(q=>q.section===code).map(q=>q.number));
+    const missing=[];for(let n=1;n<=expected;n++)if(!nums.has(n))missing.push(n);
+    parts.push(`${code}:${nums.size}/${expected}${missing.length?`（缺 ${missing.join('、')}）`:''}`);
+  }
+  return parts.join('；');
 }
 function parseCommonText(raw,source){
   const text=normalizeText(raw);const qRe=/(\d{1,3})\.\s*\(([1-4])\)\s*([\s\S]*?)(?=\s+\d{1,3}\.\s*\([1-4]\)|$)/g;const arr=[];let q;
@@ -93,12 +118,32 @@ async function fetchProfessionalBuffer(){
     return fetchBuffer(proxy);
   }
 }
+async function loadBundledProfessional(status=()=>{}){
+  status('載入內建 13900 專業題庫…');
+  const r=await fetch(BUNDLED_PROF_URL,{cache:'no-store'});
+  if(!r.ok)throw new Error(`內建題庫 HTTP ${r.status}`);
+  const data=await r.json();
+  const qs=Array.isArray(data?.questions)?data.questions:[];
+  if(qs.length!==SOURCES.professional.expected)throw new Error(`內建題庫只有 ${qs.length}/${SOURCES.professional.expected} 題`);
+  for(const [code,,expected] of SOURCES.professional.sections){
+    const sec=qs.filter(q=>q.section===code);
+    const nums=new Set(sec.map(q=>Number(q.number)));
+    if(sec.length!==expected||nums.size!==expected)throw new Error(`內建題庫工作項目 ${code} 不完整：${sec.length}/${expected}`);
+    for(let n=1;n<=expected;n++)if(!nums.has(n))throw new Error(`內建題庫工作項目 ${code} 缺第 ${n} 題`);
+  }
+  const bad=qs.find(q=>!q.id||!q.prompt||!Array.isArray(q.options)||q.options.length!==4||!q.options.every(Boolean)||![1,2,3,4].includes(Number(q.answer)));
+  if(bad)throw new Error(`內建題庫格式異常：${bad.id||'未知題號'}`);
+  await replaceQuestionKind('professional',qs);
+  await setMeta('professionalSync',{at:new Date().toISOString(),count:qs.length,source:'bundled-pdf-verified',version:data.sourceFile||'題庫.pdf'});
+  status(`專業題庫已修復：${qs.length}/647`);
+  return qs;
+}
 async function importProfessionalBuffer(buffer,status){
   status('正在解析專業題庫 PDF…');
   const text=await pdfToText(buffer,(p,n)=>status(`解析專業題庫：${p}/${n} 頁`));
   const qs=parseProfessionalText(text);
   const counts=Object.fromEntries(SOURCES.professional.sections.map(([c])=>[c,qs.filter(q=>q.section===c).length]));
-  if(qs.length<600) throw new Error(`只解析到 ${qs.length} 題，PDF 格式可能不同；請改用指定的 13900 題庫 PDF。`);
+  if(qs.length!==SOURCES.professional.expected) throw new Error(`解析到 ${qs.length}/${SOURCES.professional.expected} 題。${professionalDiagnostics(qs)}。請勿使用不完整題庫；此版本會阻止殘缺題庫覆蓋原資料。`);
   await replaceQuestionKind('professional',qs);
   await setMeta('professionalSync',{at:new Date().toISOString(),count:qs.length,counts,source:'13900-public-pdf'});
   return qs;
@@ -274,7 +319,7 @@ function startQuiz(questions,mode='practice',title='刷題',opts={}){
 function renderQuiz(){
   const s=state.session;if(!s)return renderStudy();if(s.index>=s.questions.length)return finishQuiz();const q=s.questions[s.index];const p=getProgress(q.originId||q.id);const v=document.querySelector('#view-study');
   const timeHtml=s.seconds!=null?`<span id="timer" class="pill warn">${formatTime(Math.max(0,s.seconds-Math.floor((Date.now()-s.startedAt)/1000)))}</span>`:`<span class="pill">${s.index+1}/${s.questions.length}</span>`;
-  v.innerHTML=`<div class="question-head"><div><div class="eyebrow">${esc(s.title)}</div><div class="question-no">${esc(q.sectionName)} · 第 ${q.number} 題</div></div>${timeHtml}</div><div class="progress" style="margin:12px 0 18px"><i style="width:${pct(s.index,s.questions.length)}%"></i></div><div class="card"><div class="row" style="justify-content:space-between"><span class="pill ${p.wrong?'bad':''}">${p.attempts?`做過 ${p.attempts} 次 · 錯 ${p.wrong}`:'第一次出現'}</span><button id="starQuestion" class="ghost small">${p.starred?'★ 已收藏':'☆ 收藏'}</button></div><div class="question-text">${esc(q.prompt)}</div>${q.imageLikely?'<div class="banner">這題可能含原題圖示；若選項顯示不完整，請回官方 PDF 對照。</div>':''}<div class="options">${q.options.map((o,i)=>`<button class="option" data-answer="${i+1}"><span class="letter">${LETTERS[i]}</span><span>${esc(o)}</span></button>`).join('')}</div><div id="feedback"></div><div class="quiz-actions"><button id="guessBtn" class="ghost" ${s.noFeedback?'hidden':''}>這題我是猜的</button><button id="nextBtn" class="primary" disabled>${s.index===s.questions.length-1?'完成':'下一題'}</button></div></div><button id="quitQuiz" class="ghost wide">先離開</button>`;
+  v.innerHTML=`<div class="question-head"><div><div class="eyebrow">${esc(s.title)}</div><div class="question-no">${esc(q.sectionName)} · 第 ${q.number} 題</div></div>${timeHtml}</div><div class="progress" style="margin:12px 0 18px"><i style="width:${pct(s.index,s.questions.length)}%"></i></div><div class="card"><div class="row" style="justify-content:space-between"><span class="pill ${p.wrong?'bad':''}">${p.attempts?`做過 ${p.attempts} 次 · 錯 ${p.wrong}`:'第一次出現'}</span><button id="starQuestion" class="ghost small">${p.starred?'★ 已收藏':'☆ 收藏'}</button></div><div class="question-text">${esc(q.prompt)}</div>${q.image?`<figure class="question-figure"><img src="${esc(q.image)}" alt="${esc(q.imageAlt||'原題圖示')}" loading="eager"></figure>`:(q.imageLikely?'<div class="banner">這題可能含原題圖示；若選項顯示不完整，請回題庫 PDF 對照。</div>':'')}<div class="options">${q.options.map((o,i)=>`<button class="option" data-answer="${i+1}"><span class="letter">${LETTERS[i]}</span><span>${esc(o)}</span></button>`).join('')}</div><div id="feedback"></div><div class="quiz-actions"><button id="guessBtn" class="ghost" ${s.noFeedback?'hidden':''}>這題我是猜的</button><button id="nextBtn" class="primary" disabled>${s.index===s.questions.length-1?'完成':'下一題'}</button></div></div><button id="quitQuiz" class="ghost wide">先離開</button>`;
   const options=[...v.querySelectorAll('.option')];options.forEach(btn=>btn.onclick=()=>selectAnswer(Number(btn.dataset.answer)));
   v.querySelector('#guessBtn')?.addEventListener('click',()=>{s.guessed=!s.guessed;v.querySelector('#guessBtn').textContent=s.guessed?'✓ 已標記：我是猜的':'這題我是猜的';});
   v.querySelector('#nextBtn').onclick=()=>advanceQuiz();v.querySelector('#quitQuiz').onclick=()=>{if(s.mode==='mock')confirmAction('離開模擬考？','目前進度不會計入模考成績。',()=>{clearQuizTimer();state.session=null;navigate('exam');});else{clearQuizTimer();state.session=null;navigate('home');}};
@@ -307,7 +352,8 @@ function formatTime(sec){const m=Math.floor(sec/60),s=sec%60;return `${String(m)
 function openSyncDialog(){renderSyncStatus();document.querySelector('#syncDialog').showModal();}
 function syncMsg(msg){document.querySelector('#syncStatus').innerHTML=`<div class="banner">${esc(msg)}</div>`;}
 function renderSyncStatus(){const b=bankInfo();document.querySelector('#syncStatus').innerHTML=`<div class="sync-line"><span>專業題庫</span><b>${b.professional}/647</b></div>${SOURCES.common.map(s=>`<div class="sync-line"><span>${esc(s.label)}</span><b>${b.byCommon[s.code]||0}/${s.expected}</b></div>`).join('')}`;}
-async function autoSync(){const btn=document.querySelector('#autoSyncBtn');btn.disabled=true;try{syncMsg('準備 PDF 解析器…');await loadPdfJs();syncMsg('下載 13900 專業題庫…');const buf=await fetchProfessionalBuffer();await importProfessionalBuffer(buf,syncMsg);for(const src of SOURCES.common)await syncOneCommon(src,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);syncMsg(`同步完成：共 ${state.questions.length} 題。`);renderSyncStatus();toast('完整題庫同步完成');renderHome();}catch(e){console.error(e);syncMsg(`自動同步沒有完成：${e.message}。可改用「匯入 13900 PDF」，共同科目可再單獨同步。`);}finally{btn.disabled=false;}}
+async function autoSync(){const btn=document.querySelector('#autoSyncBtn');btn.disabled=true;try{await loadBundledProfessional(syncMsg);await loadPdfJs();for(const src of SOURCES.common)await syncOneCommon(src,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);syncMsg(`同步完成：專業 ${bankInfo().professional}/647，共同 ${bankInfo().common} 題。`);renderSyncStatus();toast('完整題庫同步完成');renderHome();}catch(e){console.error(e);syncMsg(`同步沒有完成：${e.message}。專業題可按「修復內建 647 題」，共同科目可再單獨同步。`);}finally{btn.disabled=false;}}
+async function repairProfessional(){const btn=document.querySelector('#repairProfessionalBtn');if(btn)btn.disabled=true;try{const qs=await loadBundledProfessional(syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);renderSyncStatus();syncMsg(`專業題庫已修復 ${qs.length}/647 題。原本的作答與錯題紀錄會保留。`);toast('專業 647 題已修復');renderHome();}catch(e){console.error(e);syncMsg(`專業題庫修復失敗：${e.message}`);}finally{if(btn)btn.disabled=false;}}
 async function syncCommon(){const btn=document.querySelector('#syncCommonBtn');btn.disabled=true;try{await loadPdfJs();for(const src of SOURCES.common)await syncOneCommon(src,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);renderSyncStatus();toast('共同科目更新完成');}catch(e){syncMsg(`共同科目同步失敗：${e.message}`);}finally{btn.disabled=false;}}
 async function importProfessionalFile(file){if(!file)return;try{await loadPdfJs();const buf=await file.arrayBuffer();const qs=await importProfessionalBuffer(buf,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);renderSyncStatus();syncMsg(`專業題庫已匯入 ${qs.length} 題。`);toast('專業題庫匯入完成');renderHome();}catch(e){syncMsg(`匯入失敗：${e.message}`);}}
 
@@ -317,8 +363,12 @@ function confirmAction(title,text,fn){const d=document.querySelector('#confirmDi
 
 async function init(){
   db=await openDB();state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));
+  // v4 專業題庫直接隨 App 附帶；若舊版曾只匯入 642 題，啟動時自動補成完整 647 題。
+  if(state.questions.filter(q=>q.kind==='professional').length!==SOURCES.professional.expected){
+    try{await loadBundledProfessional(()=>{});state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);}catch(e){console.warn('bundled professional bank load failed',e);}
+  }
   document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));
-  document.querySelector('#autoSyncBtn').onclick=autoSync;document.querySelector('#syncCommonBtn').onclick=syncCommon;document.querySelector('#importProfessionalBtn').onclick=()=>document.querySelector('#professionalFile').click();document.querySelector('#professionalFile').onchange=e=>importProfessionalFile(e.target.files?.[0]);
+  document.querySelector('#autoSyncBtn').onclick=autoSync;document.querySelector('#repairProfessionalBtn')?.addEventListener('click',repairProfessional);document.querySelector('#syncCommonBtn').onclick=syncCommon;document.querySelector('#importProfessionalBtn').onclick=()=>document.querySelector('#professionalFile').click();document.querySelector('#professionalFile').onchange=e=>importProfessionalFile(e.target.files?.[0]);
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;const btn=document.querySelector('#installBtn');btn.hidden=false;btn.onclick=async()=>{deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;btn.hidden=true;};});
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);
   renderHome();
