@@ -22,3 +22,10 @@ dialog{border:0;border-radius:24px;padding:0;max-width:560px;width:calc(100% - 2
 
 .question-figure{margin:14px 0 16px;padding:10px;background:#fff;border:1px solid #eceaf7;border-radius:16px;overflow:hidden}
 .question-figure img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain}
+.feedback.learn{background:#fff6dc;border:1px solid #eddca2}
+.learning-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:15px}
+.teacher-card{margin-top:12px;padding:15px;border-radius:16px;background:#fff;border:1px solid var(--line);line-height:1.65;color:#343348}
+.teacher-card p{margin:8px 0}.teacher-title{font-size:15px;font-weight:850;color:var(--primary);margin-bottom:7px}.teacher-tags{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 9px}.memory-tip{margin:10px 0;padding:10px 12px;border-radius:12px;background:var(--primary-soft);color:#433f77}.teacher-status{font-size:12px;color:var(--muted)}.teacher-card small{display:block;color:var(--muted);margin-top:8px}.teacher-help-row{margin-top:10px}.teacher-help-row button{width:100%}
+@media(max-width:520px){.learning-actions{grid-template-columns:1fr}}
+.choice-tip{margin:10px 0;padding:10px 12px;border-left:3px solid #aaa4ff;background:#f8f7ff;border-radius:10px;color:#4f4b71}
+.reverse-tip{margin:9px 0;padding:9px 11px;border-radius:11px;background:#fff1f3;color:#8d3042;border:1px solid #f2cdd4}
