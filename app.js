@@ -1,12 +1,13 @@
 import { SOURCES } from './data/sources.js';
 
 const DB_NAME='pet-grooming-cram-db';
-const DB_VERSION=1;
+const DB_VERSION=2;
 const STORE_Q='questions';
 const STORE_P='progress';
 const STORE_M='meta';
+const STORE_B='snapshots';
 const LETTERS=['A','B','C','D'];
-const APP_VERSION='v6';
+const APP_VERSION='v7';
 const BUNDLED_PROF_URL='./data/professional-13900.json';
 const SECTION_NAMES=Object.fromEntries(SOURCES.professional.sections.map(([code,name])=>[code,name]));
 const COMMON_NAMES=Object.fromEntries(SOURCES.common.map(x=>[x.code,x.label]));
@@ -20,9 +21,11 @@ const esc=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'
 
 let db;
 let deferredInstall;
+let snapshotTimer=null;
+let snapshotRunning=false;
 let state={view:'home',questions:[],progress:new Map(),meta:{},session:null,historyMode:false};
 
-function openDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains(STORE_Q))d.createObjectStore(STORE_Q,{keyPath:'id'});if(!d.objectStoreNames.contains(STORE_P))d.createObjectStore(STORE_P,{keyPath:'id'});if(!d.objectStoreNames.contains(STORE_M))d.createObjectStore(STORE_M,{keyPath:'key'});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+function openDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>{const d=r.result;if(!d.objectStoreNames.contains(STORE_Q))d.createObjectStore(STORE_Q,{keyPath:'id'});if(!d.objectStoreNames.contains(STORE_P))d.createObjectStore(STORE_P,{keyPath:'id'});if(!d.objectStoreNames.contains(STORE_M))d.createObjectStore(STORE_M,{keyPath:'key'});if(!d.objectStoreNames.contains(STORE_B))d.createObjectStore(STORE_B,{keyPath:'id'});};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
 function tx(store,mode='readonly'){return db.transaction(store,mode).objectStore(store);}
 function getAll(store){return new Promise((resolve,reject)=>{const r=tx(store).getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});}
 function put(store,obj){return new Promise((resolve,reject)=>{const r=tx(store,'readwrite').put(obj);r.onsuccess=()=>resolve(obj);r.onerror=()=>reject(r.error);});}
@@ -35,7 +38,45 @@ function getMeta(key,fallback=null){return state.meta[key] ?? fallback;}
 function defaultProgress(id){return {id,attempts:0,correct:0,wrong:0,unknown:0,streak:0,level:0,lastAt:null,nextDue:null,lastAnswer:null,guessed:0,starred:false,needsHelp:false,history:[]};}
 function exposureCount(p){return (p.attempts||0)+(p.unknown||0);}
 function getProgress(id){return state.progress.get(id)||defaultProgress(id);}
-async function saveProgress(p){state.progress.set(p.id,p);await put(STORE_P,p);}
+async function saveProgress(p){state.progress.set(p.id,p);await put(STORE_P,p);queueAutoSnapshot('作答更新');}
+
+
+function backupPayload(){
+  return {version:2,appVersion:APP_VERSION,exportedAt:new Date().toISOString(),progress:[...state.progress.values()],meta:{...state.meta}};
+}
+async function writeAutoSnapshot(reason='自動保存'){
+  if(!db||snapshotRunning)return;
+  snapshotRunning=true;
+  try{
+    const createdAt=new Date().toISOString(),payload=backupPayload();
+    await put(STORE_B,{id:'latest',createdAt,date:today(),reason,payload});
+    await put(STORE_B,{id:`day-${today()}`,createdAt,date:today(),reason,payload});
+    const all=await getAll(STORE_B);
+    const days=all.filter(x=>String(x.id).startsWith('day-')).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    for(const old of days.slice(7))await del(STORE_B,old.id);
+    state.meta.lastAutoBackupAt=createdAt;
+    await put(STORE_M,{key:'lastAutoBackupAt',value:createdAt});
+  }catch(e){console.warn('auto snapshot failed',e);}finally{snapshotRunning=false;}
+}
+function queueAutoSnapshot(reason='自動保存'){
+  clearTimeout(snapshotTimer);snapshotTimer=setTimeout(()=>writeAutoSnapshot(reason),250);
+}
+async function ensurePersistentStorage(){
+  let supported=!!navigator.storage?.persist,granted=false;
+  try{if(supported){granted=await navigator.storage.persisted();if(!granted)granted=await navigator.storage.persist();}}catch(e){console.warn('persistent storage request failed',e);}
+  state.meta.storagePersistent=!!granted;
+  await put(STORE_M,{key:'storagePersistent',value:!!granted});
+  return {supported,granted};
+}
+async function autoSyncCommonInBackground(){
+  const b=bankInfo();if(b.readyCommon||!navigator.onLine)return;
+  try{
+    await loadPdfJs();
+    for(const src of SOURCES.common){if((bankInfo().byCommon[src.code]||0)<90)await syncOneCommon(src,()=>{});}
+    state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);
+    renderHome();queueAutoSnapshot('共同科目首次同步');
+  }catch(e){console.warn('background common sync failed',e);}
+}
 
 function toast(msg){const el=document.querySelector('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2500);}
 function pct(n,d){return d?Math.round(n/d*100):0;}
@@ -345,8 +386,10 @@ function renderStats(){
 
 function renderSettings(navigateNow=false){
   if(navigateNow){state.view='settings';document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelector('#view-settings').classList.add('active');document.querySelectorAll('.bottom-nav button').forEach(x=>x.classList.remove('active'));}
-  const v=document.querySelector('#view-settings');v.innerHTML=`<div class="section-title"><h2>設定</h2><span class="pill">${APP_VERSION}</span></div><div class="card"><div class="setting-row"><div><b>每日專業新題</b><div class="muted small-text">預設 50 題；中途離開會從剩餘題數接著算</div></div><input id="dailyPro" type="number" min="5" max="100" value="${getMeta('dailyProfessional',50)}"></div><div class="setting-row"><div><b>每日共同科目</b><div class="muted small-text">預設 10 題</div></div><input id="dailyCom" type="number" min="0" max="40" value="${getMeta('dailyCommon',10)}"></div></div><div class="card"><h3>目前採用：初學模式</h3><p class="muted small-text">第一次看到的題目，即使靠常識答對，隔天仍會再確認一次；答錯、猜對、或按「完全不知道」都會進今日檢討。一般刷題會打亂文字選項，避免只背 A/B/C/D。</p></div><div class="card"><h3>題庫</h3><button id="syncSettings" class="primary wide">同步／更新題庫</button></div><div class="card"><h3>備份學習紀錄</h3><p class="muted small-text">可匯出 JSON。換手機或清除瀏覽器資料前先備份。</p><div class="grid2"><button id="exportBtn" class="secondary">匯出備份</button><button id="importBackupBtn" class="ghost">匯入備份</button></div><input id="backupFile" type="file" accept="application/json" hidden></div><div class="card"><h3>危險區</h3><button id="resetBtn" class="danger wide">清除所有學習紀錄</button></div><button id="settingsHome" class="ghost wide">回今日首頁</button>`;
-  v.querySelector('#dailyPro').onchange=e=>setMeta('dailyProfessional',clamp(Number(e.target.value)||50,5,100));v.querySelector('#dailyCom').onchange=e=>setMeta('dailyCommon',clamp(Number(e.target.value)||10,0,40));v.querySelector('#syncSettings').onclick=openSyncDialog;v.querySelector('#settingsHome').onclick=()=>navigate('home');v.querySelector('#exportBtn').onclick=exportBackup;v.querySelector('#importBackupBtn').onclick=()=>v.querySelector('#backupFile').click();v.querySelector('#backupFile').onchange=importBackup;v.querySelector('#resetBtn').onclick=()=>confirmAction('清除所有學習紀錄？','錯題、作答紀錄、熟練度與模考成績都會歸零，但題庫會保留。',async()=>{await clearStore(STORE_P);state.progress.clear();await setMeta('mockResults',[]);toast('學習紀錄已清除');renderSettings();});
+  const last=getMeta('lastAutoBackupAt',null),persist=getMeta('storagePersistent',false);
+  const lastText=last?new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(last)):'尚未建立';
+  const v=document.querySelector('#view-settings');v.innerHTML=`<div class="section-title"><h2>設定</h2><span class="pill">${APP_VERSION}</span></div><div class="card"><div class="setting-row"><div><b>每日專業新題</b><div class="muted small-text">預設 50 題；中途離開會從剩餘題數接著算</div></div><input id="dailyPro" type="number" min="5" max="100" value="${getMeta('dailyProfessional',50)}"></div><div class="setting-row"><div><b>每日共同科目</b><div class="muted small-text">預設 10 題</div></div><input id="dailyCom" type="number" min="0" max="40" value="${getMeta('dailyCommon',10)}"></div></div><div class="card"><h3>目前採用：初學模式</h3><p class="muted small-text">第一次看到的題目，即使靠常識答對，隔天仍會再確認一次；答錯、猜對、或按「完全不知道」都會進今日檢討。一般刷題會打亂文字選項，避免只背 A/B/C/D。</p></div><div class="card"><h3>自動保存與備份</h3><p><b>✓ 每一題作答後自動保存</b></p><p class="muted small-text">錯題、猜題、不知道、熟練度、收藏、老師待講題與成績都會立即寫進本機；另保留最近 7 天的自動快照。</p><div class="sync-line"><span>最近自動快照</span><b>${esc(lastText)}</b></div><div class="sync-line"><span>瀏覽器永久儲存</span><b>${persist?'已啟用':'未確認'}</b></div><p class="muted small-text">正常關閉 App、重新開機或離線都不會掉紀錄。只有你主動「清除網站資料／瀏覽器資料」時，本機資料仍可能被刪除；下方手動匯出可作異機救援備份。</p></div><div class="card"><h3>題庫</h3><button id="syncSettings" class="primary wide">同步／更新題庫</button></div><div class="card"><h3>救援備份</h3><p class="muted small-text">平常不用按。只有要清瀏覽器、換手機或想多留一份檔案時再匯出 JSON。</p><div class="grid2"><button id="exportBtn" class="secondary">匯出一份備份</button><button id="importBackupBtn" class="ghost">匯入備份</button></div><input id="backupFile" type="file" accept="application/json" hidden></div><div class="card"><h3>危險區</h3><button id="resetBtn" class="danger wide">清除所有學習紀錄</button></div><button id="settingsHome" class="ghost wide">回今日首頁</button>`;
+  v.querySelector('#dailyPro').onchange=async e=>{await setMeta('dailyProfessional',clamp(Number(e.target.value)||50,5,100));queueAutoSnapshot('設定更新');};v.querySelector('#dailyCom').onchange=async e=>{await setMeta('dailyCommon',clamp(Number(e.target.value)||10,0,40));queueAutoSnapshot('設定更新');};v.querySelector('#syncSettings').onclick=openSyncDialog;v.querySelector('#settingsHome').onclick=()=>navigate('home');v.querySelector('#exportBtn').onclick=exportBackup;v.querySelector('#importBackupBtn').onclick=()=>v.querySelector('#backupFile').click();v.querySelector('#backupFile').onchange=importBackup;v.querySelector('#resetBtn').onclick=()=>confirmAction('清除所有學習紀錄？','錯題、作答紀錄、熟練度與模考成績都會歸零，但題庫會保留。',async()=>{await clearStore(STORE_P);state.progress.clear();await setMeta('mockResults',[]);await writeAutoSnapshot('清除後快照');toast('學習紀錄已清除');renderSettings();});
 }
 
 function navigate(view){state.view=view;document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${view}`));document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='home')renderHome();if(view==='study')renderStudy();if(view==='review')renderReview();if(view==='exam')renderExam();if(view==='stats')renderStats();window.scrollTo(0,0);}
@@ -560,13 +603,13 @@ async function repairProfessional(){const btn=document.querySelector('#repairPro
 async function syncCommon(){const btn=document.querySelector('#syncCommonBtn');btn.disabled=true;try{await loadPdfJs();for(const src of SOURCES.common)await syncOneCommon(src,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);renderSyncStatus();toast('共同科目更新完成');}catch(e){syncMsg(`共同科目同步失敗：${e.message}`);}finally{btn.disabled=false;}}
 async function importProfessionalFile(file){if(!file)return;try{await loadPdfJs();const buf=await file.arrayBuffer();const qs=await importProfessionalBuffer(buf,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);renderSyncStatus();syncMsg(`專業題庫已匯入 ${qs.length} 題。`);toast('專業題庫匯入完成');renderHome();}catch(e){syncMsg(`匯入失敗：${e.message}`);}}
 
-async function exportBackup(){const data={version:1,exportedAt:new Date().toISOString(),progress:[...state.progress.values()],meta:state.meta};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`寵物美容丙級_學習備份_${today()}.json`;a.click();URL.revokeObjectURL(a.href);}
-async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(!Array.isArray(data.progress))throw new Error('格式不正確');await bulkPut(STORE_P,data.progress);for(const p of data.progress)state.progress.set(p.id,p);if(data.meta)for(const [k,v] of Object.entries(data.meta))await setMeta(k,v);toast('學習紀錄已還原');renderSettings();}catch(err){toast('備份檔無法匯入');}}
+async function exportBackup(){const data=backupPayload();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`寵物美容丙級_學習備份_${today()}.json`;a.click();URL.revokeObjectURL(a.href);}
+async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(!Array.isArray(data.progress))throw new Error('格式不正確');await bulkPut(STORE_P,data.progress);for(const p of data.progress)state.progress.set(p.id,p);if(data.meta)for(const [k,v] of Object.entries(data.meta))await setMeta(k,v);await writeAutoSnapshot('匯入備份');toast('學習紀錄已還原');renderSettings();}catch(err){toast('備份檔無法匯入');}}
 function confirmAction(title,text,fn){const d=document.querySelector('#confirmDialog');d.querySelector('#confirmTitle').textContent=title;d.querySelector('#confirmText').textContent=text;const ok=d.querySelector('#confirmOk');ok.onclick=()=>setTimeout(fn,0);d.showModal();}
 
 async function init(){
   db=await openDB();state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));
-  // v5 會重新套用內建 647 題，修正文句斷行與新版學習欄位；作答／錯題紀錄保留。
+  // v7 重新套用內建 647 題；程式更新不會清除作答／錯題紀錄。
   if(state.questions.filter(q=>q.kind==='professional').length!==SOURCES.professional.expected||getMeta('bundledProfessionalVersion')!==APP_VERSION){
     try{await loadBundledProfessional(()=>{});await setMeta('bundledProfessionalVersion',APP_VERSION);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);}catch(e){console.warn('bundled professional bank load failed',e);}
   }
@@ -574,6 +617,11 @@ async function init(){
   document.querySelector('#autoSyncBtn').onclick=autoSync;document.querySelector('#repairProfessionalBtn')?.addEventListener('click',repairProfessional);document.querySelector('#syncCommonBtn').onclick=syncCommon;document.querySelector('#importProfessionalBtn').onclick=()=>document.querySelector('#professionalFile').click();document.querySelector('#professionalFile').onchange=e=>importProfessionalFile(e.target.files?.[0]);
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;const btn=document.querySelector('#installBtn');btn.hidden=false;btn.onclick=async()=>{deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;btn.hidden=true;};});
   if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);
+  await ensurePersistentStorage();
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')writeAutoSnapshot('離開 App');});
+  window.addEventListener('pagehide',()=>writeAutoSnapshot('關閉頁面'));
+  await writeAutoSnapshot('啟動 App');
   renderHome();
+  setTimeout(()=>autoSyncCommonInBackground(),700);
 }
 init().catch(e=>{console.error(e);document.querySelector('#view-home').innerHTML=`<div class="banner bad"><b>App 啟動失敗</b><br>${esc(e.message)}</div>`;});
