@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#6b5cff" />
+  <meta name="description" content="13900 寵物美容丙級每日刷題、錯題複習、歷屆試題與模擬考 PWA" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>寵物美容丙級｜私人補習班</title>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">13900 PET GROOMING · 丙級</div>
+      <h1>我的寵物美容補習班</h1>
+    </div>
+    <button id="installBtn" class="ghost small" hidden>安裝到手機</button>
+  </header>
+
+  <main id="app" class="app-shell">
+    <section id="view-home" class="view active"></section>
+    <section id="view-study" class="view"></section>
+    <section id="view-review" class="view"></section>
+    <section id="view-exam" class="view"></section>
+    <section id="view-history" class="view"></section>
+    <section id="view-stats" class="view"></section>
+    <section id="view-settings" class="view"></section>
+  </main>
+
+  <nav class="bottom-nav" aria-label="主選單">
+    <button data-view="home" class="active"><span>⌂</span>今日</button>
+    <button data-view="study"><span>✎</span>刷題</button>
+    <button data-view="review"><span>↺</span>錯題</button>
+    <button data-view="exam"><span>✓</span>模考</button>
+    <button data-view="stats"><span>▦</span>統計</button>
+  </nav>
+
+  <dialog id="syncDialog">
+    <form method="dialog" class="dialog-card">
+      <div class="dialog-head">
+        <div><div class="eyebrow">QUESTION BANK</div><h2>題庫同步／更新</h2></div>
+        <button value="cancel" class="icon-btn" aria-label="關閉">×</button>
+      </div>
+      <p class="muted">第一次使用先把專業 647 題與共同科目同步進手機。同步完成後，題目與學習紀錄會保存在本機，可離線刷題。</p>
+      <div id="syncStatus" class="sync-status"></div>
+      <div class="stack">
+        <button type="button" id="autoSyncBtn" class="primary">自動同步完整題庫</button>
+        <button type="button" id="importProfessionalBtn" class="secondary">匯入 13900 官方／公開題庫 PDF</button>
+        <input id="professionalFile" type="file" accept="application/pdf" hidden />
+        <button type="button" id="syncCommonBtn" class="secondary">只更新 4 科共同題庫</button>
+      </div>
+      <details>
+        <summary>如果自動同步失敗</summary>
+        <p>可先下載 13900 題庫 PDF，再按「匯入 PDF」。App 會在手機本機解析題目與答案，不會上傳你的檔案。</p>
+        <a class="text-link" href="https://onlinetest.tw/btest/collection/13900/139003A13.pdf" target="_blank" rel="noreferrer">開啟 13900 公開題庫 PDF</a>
+      </details>
+    </form>
+  </dialog>
+
+  <dialog id="confirmDialog">
+    <form method="dialog" class="dialog-card compact">
+      <h3 id="confirmTitle">確認</h3>
+      <p id="confirmText" class="muted"></p>
+      <div class="row end"><button value="cancel" class="ghost">取消</button><button id="confirmOk" value="default" class="danger">確定</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
