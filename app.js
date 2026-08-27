@@ -6,7 +6,7 @@ const STORE_Q='questions';
 const STORE_P='progress';
 const STORE_M='meta';
 const LETTERS=['A','B','C','D'];
-const APP_VERSION='v5';
+const APP_VERSION='v6';
 const BUNDLED_PROF_URL='./data/professional-13900.json';
 const SECTION_NAMES=Object.fromEntries(SOURCES.professional.sections.map(([code,name])=>[code,name]));
 const COMMON_NAMES=Object.fromEntries(SOURCES.common.map(x=>[x.code,x.label]));
@@ -353,14 +353,56 @@ function navigate(view){state.view=view;document.querySelectorAll('.view').forEa
 
 const CURATED_TEACHER_NOTES={
   '13900-06-050':{
-    why:'美容前溝通要聚焦在會影響當次美容安全、造型與照護的資訊，例如胖瘦、毛髮與牙齒狀況；犬隻血統本身不是當次美容操作需要處理的重點，所以題庫答案選「犬隻的血統問題」。',
-    memory:'美容前先想「外觀、毛髮、健康」，血統不是美容操作重點。',
-    others:'犬隻胖瘦會影響美容安全與操作；毛髮保養本來就是美容核心；牙齒狀況屬健康觀察，可提醒飼主留意；因此「犬隻的血統問題」才是本題的例外。'
+    lessonType:'理解題',
+    detailLevel:'完整解析',
+    concept:'美容前溝通要處理「會影響這次美容安全、造型與照護」的資訊。',
+    why:'犬隻的胖瘦、毛髮狀況與牙齒狀況，都可能影響美容時的操作或需要提醒飼主；血統本身不會改變這一次要怎麼洗、吹、剪或做安全評估，所以「犬隻的血統問題」是不恰當的重點。',
+    memory:'美容前先想「體況、毛髮、健康」；血統不是當次美容操作重點。',
+    choiceNotes:{
+      '犬隻的胖瘦':'犬隻的胖瘦：要看。過胖、過瘦或年老都可能影響站立、耐受度與美容安全。',
+      '毛髮的保養':'毛髮的保養：要看。毛況、打結與皮膚狀況直接影響洗護與修剪。',
+      '牙齒的保健':'牙齒的保健：可以觀察並提醒飼主，屬於健康照護資訊。',
+      '犬隻的血統問題':'犬隻的血統問題：不是這次美容操作必須處理的重點，所以是答案。'
+    }
   },
   '13900-04-032':{
-    why:'題庫把貓咪的社會化時期定在 30～60 天，也就是大約 1～2 個月大。這類題目重點是把早期成長階段和固定天數直接配對記住。',
+    lessonType:'記憶＋理解題',
+    detailLevel:'完整解析',
+    concept:'幼貓早期接觸人、環境與同伴的經驗，會影響後續的社會行為。',
+    why:'題庫把貓咪的「社會化時期」定在 30～60 天，也就是約 1～2 個月大。這是很早期的成長階段，因此 7～9 個月或 12 個月以上都太晚；0～14 天則仍屬非常早的初生階段。',
     memory:'貓社會化＝約 1～2 個月＝30～60 天。',
-    others:'0～14 天太早；7～9 個月與 12 個月以上都已遠超過題庫所指的早期社會化階段。'
+    choiceNotes:{
+      '0 天～14 天':'0～14 天：太早，仍是非常早期的初生階段。',
+      '30 天～60 天':'30～60 天：題庫指定的社會化時期，約 1～2 個月。',
+      '7 個月～9 個月':'7～9 個月：已遠超過題庫所指的早期社會化階段。',
+      '12 個月以上':'12 個月以上：更不是幼貓早期社會化階段。'
+    }
+  },
+  '13900-03-092':{
+    lessonType:'理解題',
+    detailLevel:'完整解析',
+    concept:'辨認犬隻「呼吸系統」與其他器官系統。',
+    why:'咽喉、氣管、肺臟都和空氣進出及氣體交換有關，屬於呼吸系統；脾臟不是呼吸器官，主要與免疫及血液相關，所以「脾臟」是這題要找的例外。',
+    memory:'呼吸路線抓「咽喉 → 氣管 → 肺」；脾臟不在空氣路線上。',
+    choiceNotes:{
+      '脾臟':'脾臟：不是呼吸系統，主要和免疫、血液功能相關，所以是答案。',
+      '咽喉':'咽喉：空氣進入呼吸道會經過的部位，屬呼吸系統相關構造。',
+      '氣管':'氣管：把空氣送往肺部，屬呼吸系統。',
+      '肺臟':'肺臟：進行氣體交換的主要器官，屬呼吸系統。'
+    }
+  },
+  '13900-03-093':{
+    lessonType:'理解題',
+    detailLevel:'完整解析',
+    concept:'辨認犬隻「消化系統」與「泌尿系統」。',
+    why:'胃、小腸、大腸都在食物的消化與吸收路徑上，屬於消化系統；腎臟的主要工作是過濾血液、形成尿液，屬於泌尿系統，因此「腎臟」不是犬隻的消化系統。',
+    memory:'食物路線：胃 → 小腸 → 大腸；腎臟走的是「尿液路線」，不在食物路線上。',
+    choiceNotes:{
+      '胃':'胃：消化系統。負責儲存、攪拌食物並進行初步消化。',
+      '小腸':'小腸：消化系統。是主要消化與吸收營養的部位。',
+      '大腸':'大腸：消化系統。主要吸收水分並形成糞便。',
+      '腎臟':'腎臟：泌尿系統。過濾血液並形成尿液，所以是本題答案。'
+    }
   }
 };
 function teacherTags(q){
@@ -376,43 +418,67 @@ function teacherTags(q){
 }
 function teacherNote(q){
   const answerText=q.options[q.answer-1]||'',curated=CURATED_TEACHER_NOTES[q.originId||q.id],tags=teacherTags(q),negative=/何者為非|何者非|錯誤|不正確|不恰當|不是|非屬|不得|無需|不會|不可|不可能/.test(q.prompt);
-  if(curated)return {...curated,tags,answerText};
-  let why='';let memory='';
+  if(curated){
+    const key=x=>String(x||'').replace(/[。．，、；：!?！？\s]+$/g,'').trim();
+    const choices=q.options.map(o=>curated.choiceNotes?.[key(o)]||`${key(o)}：這個選項的逐項說明尚未建立。`);
+    return {...curated,tags,answerText,choices};
+  }
+  let lessonType='記憶題',detailLevel='基礎講解',concept='',why='',memory='',choices=[];
   if(/原產地/.test(q.prompt)){
-    why=`這是「犬種／動物 ↔ 原產地」的固定配對題。題庫指定答案為「${answerText}」，這類題目主要靠配對記憶，不適合只靠外觀猜。`;
-    memory=`把題幹中的品種名稱和「${answerText}」綁成一組記憶卡。`;
+    concept='犬種／動物與原產地的固定配對。';
+    why=`這類題沒有太多可以靠邏輯推導的理由，考的是題庫中的固定配對：本題要記「${answerText}」。`;
+    memory=`把題幹中的品種名稱和「${answerText}」綁成一組記憶卡，不要只背答案字母。`;
+    detailLevel='記憶提示';
   }else if(tags.includes('數字題')){
-    why=`這題屬於固定數字或範圍記憶。題庫答案是「${answerText}」，第一次先把這個數字和題幹關鍵詞綁在一起，之後靠間隔複習把它記牢。`;
+    concept='固定數字、時間、尺寸或範圍的題庫記憶。';
+    why=`題庫指定答案為「${answerText}」。數字題多半不能只靠常識推，重點是把題幹關鍵詞和正確數字綁在一起，之後靠間隔複習記牢。`;
     memory=`先記「${q.prompt.replace(/[？?].*$/,'').slice(0,34)} → ${answerText}」。`;
+    detailLevel='記憶提示';
   }else if(tags.includes('法規')){
-    why=`這是法規題，題庫答案為「${answerText}」。法規題不要用日常直覺推測，要以題庫版本的法定用語、主管機關、期限或資格條件為準。`;
-    memory=`看到法規題先抓「誰、要做什麼、期限／資格」三個關鍵。`;
-  }else if(negative){
-    why=`這是一題反向題，題幹要找「不符合／錯誤／不恰當」的選項。題庫答案是「${answerText}」；其餘選項在這題設定下屬於符合題意的內容。`;
-    memory=`先圈住題幹裡的「不／非／錯誤」，再找唯一例外。`;
+    concept='法規條文中的主管機關、資格、程序、期限或禁止事項。';
+    why=`這題的考試標答是「${answerText}」。法規題不能用「我覺得應該」來推，應以這一版題庫的法定用語與標答為準。`;
+    memory='法規題先抓四件事：誰、做什麼、多久、具備什麼資格。';
+    detailLevel='題庫法規提示';
   }else if(tags.includes('美容操作')){
-    why=`這題在考美容操作、工具用途或安全順序。題庫答案為「${answerText}」。刷這類題時要把「情境／工具 → 正確操作」直接連在一起。`;
+    lessonType='理解＋記憶題';
+    concept='美容工具、操作順序、安全或清潔原則。';
+    why=`本題題庫答案是「${answerText}」。這類題要把「題幹情境 → 正確工具／動作」連在一起；若涉及安全，通常優先考避免受傷、降低刺激、保持清潔與正確操作順序。`;
     memory=`把「題幹情境 → ${answerText}」當成操作口訣。`;
   }else if(tags.includes('保健衛生')){
-    why=`這題在考保健衛生的固定知識配對，題庫答案為「${answerText}」。先記住題幹的症狀、構造、病原或營養關鍵詞，再對應答案。`;
-    memory=`先抓疾病／構造／症狀關鍵字，再回想「${answerText}」。`;
+    lessonType='理解＋記憶題';
+    concept='寵物保健、生理構造、疾病、營養或衛生知識。';
+    why=`本題題庫答案是「${answerText}」。這一題目前尚未內建足夠的逐項醫理說明；先把標答和題幹關鍵詞配對，若你不能說出「為什麼」，請直接標記給老師，不把泛用文字當成完整理解。`;
+    memory=`先抓生理／疾病／症狀關鍵詞，再記「${answerText}」。`;
+    detailLevel='待補完整詳解';
   }else if(tags.includes('行為')){
-    why=`這題在考寵物行為情境的判讀，題庫答案為「${answerText}」。重點是把題幹描述的年齡、動作或情境和行為意義連起來。`;
+    lessonType='理解＋記憶題';
+    concept='由年齡、動作、情境判讀寵物行為。';
+    why=`題庫答案是「${answerText}」。行為題應把題幹中的年齡、動作、環境或刺激和行為意義連起來；這題目前先提供題庫標答，若原因看不懂請標記給老師。`;
     memory=`把情境關鍵詞和「${answerText}」成對記。`;
+    detailLevel='基礎講解';
+  }else if(negative){
+    concept='反向題：找「不符合／錯誤／不是」的唯一例外。';
+    why=`題庫答案是「${answerText}」。但只知道它是「例外」還不等於理解；這題目前沒有足夠的逐項知識說明，所以不再用「其他選項都符合」當作老師講解。`;
+    memory='先圈住題幹的「不／非／錯誤」，再確認你能說出答案為何是例外。';
+    detailLevel='待補完整詳解';
   }else{
-    why=`題庫答案為「${answerText}」。第一次先不要只背 A/B/C/D，而是把「題幹關鍵詞 → ${answerText}」記成一組；之後系統會再把這題排回來確認你是否真的理解。`;
-    memory=`答案位置會洗牌也沒關係，要記答案內容「${answerText}」，不要只記字母。`;
+    concept='題庫中的固定知識配對。';
+    why=`題庫答案為「${answerText}」。這題目前以記住「題幹關鍵詞 → 正確答案內容」為主；如果你無法解釋原因，請標記給老師，之後補成逐項詳解。`;
+    memory=`記答案內容「${answerText}」，不要只記 A/B/C/D。`;
+    detailLevel='記憶提示';
   }
-  let others='';
-  if(negative)others=`這題是在找例外；除了「${answerText}」以外，其餘選項在題庫設定下都屬於符合題意的內容。`;
-  else if(tags.includes('數字題'))others='其餘數字多半是干擾值；這類題先把正確數字和題幹關鍵詞固定配對，比硬比較四個數字有效。';
-  return {why,memory,tags,answerText,others};
+  return {lessonType,detailLevel,concept,why,memory,tags,answerText,choices};
 }
 function teacherHtml(q,firstExposure=false,unknown=false,guessed=false){
-  const n=teacherNote(q);const tags=n.tags.length?`<div class="teacher-tags">${n.tags.map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>`:'';
+  const n=teacherNote(q);
+  const tags=[n.lessonType,n.detailLevel,...n.tags].filter(Boolean);
+  const tagHtml=tags.length?`<div class="teacher-tags">${tags.map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>`:'';
   const status=unknown?'你這次選「不知道」，這題會列入今日檢討並在明天再出。':guessed?'雖然答對，但你標記為猜的，所以不算真正掌握，明天會再考。':firstExposure?'這是第一次看到；即使答對，初學模式仍會在明天安排一次確認。':'答對後會依熟練度拉長下次複習間隔。';
-  const others=n.others?`<div class="choice-tip"><b>其他選項怎麼看：</b>${esc(n.others)}</div>`:'';const reverse=n.tags.includes('反向題')?'<div class="reverse-tip"><b>先注意：</b>這題問的是「不／非／錯誤」的那一個，別把你知道的正確敘述反而選下去。</div>':'';
-  return `<div class="teacher-card"><div class="teacher-title">老師講解</div>${tags}${reverse}<p><b>正確答案：${LETTERS[q.answer-1]}　${esc(n.answerText)}</b></p><p>${esc(n.why)}</p>${others}<div class="memory-tip"><b>怎麼記：</b>${esc(n.memory)}</div><p class="teacher-status">${esc(status)}</p><small>「正確答案」來自題庫；講解與記憶提示是理解用整理，不是官方題解。</small><div class="teacher-help-row"><button id="needHelpBtn" class="ghost small">${getProgress(q.originId||q.id).needsHelp?'✓ 已標記：還不懂':'講解還是不懂，標記給老師'}</button></div></div>`;
+  const reverse=n.tags.includes('反向題')?'<div class="reverse-tip"><b>先注意：</b>這題問的是「不／非／錯誤」的那一個，別把正確敘述反而選下去。</div>':'';
+  const concept=n.concept?`<div class="concept-tip"><b>這題在學什麼：</b>${esc(n.concept)}</div>`:'';
+  const choices=n.choices?.length?`<div class="choice-breakdown"><b>四個選項逐一看：</b>${n.choices.map((x,i)=>`<div class="choice-line"><span>${LETTERS[i]}</span><p>${esc(x)}</p></div>`).join('')}</div>`:'';
+  const incomplete=n.detailLevel==='待補完整詳解'?'<div class="teacher-warning">這題目前只有題庫標答與基礎提示，還不能算「完整學會」。如果你看完仍說不出原因，請按下面標記給老師。</div>':'';
+  return `<div class="teacher-card"><div class="teacher-title">老師講解</div>${tagHtml}${reverse}${concept}<p><b>正確答案：${LETTERS[q.answer-1]}　${esc(n.answerText)}</b></p><p><b>為什麼：</b>${esc(n.why)}</p>${choices}<div class="memory-tip"><b>怎麼記：</b>${esc(n.memory)}</div>${incomplete}<p class="teacher-status">${esc(status)}</p><small>「正確答案」來自題庫；講解與記憶提示是理解用整理，不是官方題解。</small><div class="teacher-help-row"><button id="needHelpBtn" class="ghost small">${getProgress(q.originId||q.id).needsHelp?'✓ 已標記：還不懂':'講解還是不懂，標記給老師'}</button></div></div>`;
 }
 
 async function wireTeacherAction(q){

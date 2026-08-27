@@ -29,3 +29,7 @@ dialog{border:0;border-radius:24px;padding:0;max-width:560px;width:calc(100% - 2
 @media(max-width:520px){.learning-actions{grid-template-columns:1fr}}
 .choice-tip{margin:10px 0;padding:10px 12px;border-left:3px solid #aaa4ff;background:#f8f7ff;border-radius:10px;color:#4f4b71}
 .reverse-tip{margin:9px 0;padding:9px 11px;border-radius:11px;background:#fff1f3;color:#8d3042;border:1px solid #f2cdd4}
+.concept-tip{margin:9px 0 10px;padding:10px 12px;border-radius:11px;background:#f7f6ff;color:#403b70;border:1px solid #e5e1ff}
+.choice-breakdown{margin:12px 0;padding:12px;border-radius:12px;background:#fbfbfe;border:1px solid var(--line)}
+.choice-breakdown>b{display:block;margin-bottom:8px}.choice-line{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-top:1px solid #ecebf4}.choice-line:first-of-type{border-top:0}.choice-line span{flex:0 0 26px;height:26px;border-radius:8px;background:#efedf9;display:flex;align-items:center;justify-content:center;font-weight:800}.choice-line p{margin:1px 0 0;line-height:1.55}
+.teacher-warning{margin:10px 0;padding:10px 12px;border-radius:11px;background:#fff6e6;color:#7b5715;border:1px solid #f0d59f;font-size:13px;line-height:1.55}
