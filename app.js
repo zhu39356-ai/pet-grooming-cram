@@ -7,7 +7,7 @@ const STORE_P='progress';
 const STORE_M='meta';
 const STORE_B='snapshots';
 const LETTERS=['A','B','C','D'];
-const APP_VERSION='v7';
+const APP_VERSION='v8';
 const BUNDLED_PROF_URL='./data/professional-13900.json';
 const SECTION_NAMES=Object.fromEntries(SOURCES.professional.sections.map(([code,name])=>[code,name]));
 const COMMON_NAMES=Object.fromEntries(SOURCES.common.map(x=>[x.code,x.label]));
@@ -448,6 +448,55 @@ const CURATED_TEACHER_NOTES={
     }
   }
 };
+
+
+const VISUAL_BREEDS={
+  '古代英國牧羊犬':{label:'古代英國牧羊犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Old_English_Sheep_Dog.JPG?width=900',note:'頭部被毛豐厚，典型外觀會讓長毛自然覆蓋眼睛。'},
+  '古代牧羊犬':{label:'古代英國牧羊犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Old_English_Sheep_Dog.JPG?width=900',note:'頭部被毛豐厚，典型外觀會讓長毛自然覆蓋眼睛。'},
+  '雪納瑞犬':{label:'雪納瑞',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Schnauzer_mini.jpg?width=900',note:'辨識重點：濃眉、鬍鬚、硬質被毛與修短軀幹。'},
+  '雪納瑞':{label:'雪納瑞',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Schnauzer_mini.jpg?width=900',note:'辨識重點：濃眉、鬍鬚、硬質被毛與修短軀幹。'},
+  '約克夏犬':{label:'約克夏犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Yorkshire_Terrier_dog.jpg?width=800',note:'辨識重點：長而絲滑的藍鋼色與黃褐色被毛。'},
+  '德國狼犬':{label:'德國狼犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/German_Shepherd_Dog_standing.jpg?width=900',note:'側面最容易看出胸深、後軀與飛節角度。'},
+  '狼犬':{label:'德國狼犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/German_Shepherd_Dog_standing.jpg?width=900',note:'側面最容易看出胸深、後軀與飛節角度。'},
+  '北京犬':{label:'北京犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Pekingese-dog.jpg?width=800',note:'辨識重點：扁臉、大眼、濃密長毛。'},
+  '北京狗':{label:'北京犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Pekingese-dog.jpg?width=800',note:'辨識重點：扁臉、大眼、濃密長毛。'},
+  '西施犬':{label:'西施犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Shih_tzu_dog.jpg?width=800',note:'辨識重點：短口吻、長毛、垂耳。'},
+  '鬆獅犬':{label:'鬆獅犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Chow_Chow_dog.jpg?width=800',note:'辨識重點：厚重雙層毛、方正體型、藍黑舌。'},
+  '比熊犬':{label:'比熊犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Bichon_frise.JPG?width=900',note:'辨識重點：白色蓬鬆捲毛與圓形頭部輪廓。'},
+  '瑪爾濟斯犬':{label:'瑪爾濟斯犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Maltese_dog.jpg?width=900',note:'辨識重點：純白、長直、絲狀單層被毛。'},
+  '臘腸犬':{label:'臘腸犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Dachshund_Dog.jpg?width=800',note:'辨識重點：短腿、長身。'},
+  '蝴蝶犬':{label:'蝴蝶犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Papillon_dog.jpeg?width=800',note:'辨識重點：大型直立耳與耳緣長毛，像蝴蝶翅膀。'},
+  '貝林登犬':{label:'貝林登犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Bedlington_Terrier.jpg?width=900',note:'辨識重點：狹長頭型、拱背、羊羔般外觀。'},
+  '博美犬':{label:'博美犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Pomeranian_dog.jpg?width=900',note:'辨識重點：狐狸樣頭部、豐厚雙層毛、尾巴覆背。'},
+  '貴賓犬':{label:'貴賓犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Standard_Poodle.JPG?width=800',note:'辨識重點：捲毛、長口吻、典型修剪造型。'}
+};
+const TOOL_VISUALS={
+  '排梳':{title:'排梳',svg:`<svg viewBox="0 0 320 150" role="img" aria-label="排梳示意圖"><rect x="38" y="56" width="244" height="18" rx="9" fill="#6f6b78"/><g stroke="#77727f" stroke-width="5">${Array.from({length:18},(_,i)=>`<line x1="${48+i*13}" y1="72" x2="${48+i*13}" y2="124"/>`).join('')}</g></svg>`,note:'金屬齒排成一直線，常用來檢查是否還有毛結、整理毛流。'},
+  '針梳':{title:'針梳',svg:`<svg viewBox="0 0 320 180" role="img" aria-label="針梳示意圖"><rect x="80" y="25" width="160" height="80" rx="18" fill="#d8d4df"/><rect x="143" y="103" width="34" height="65" rx="14" fill="#7d6d5f"/><g stroke="#77727f" stroke-width="3">${Array.from({length:9},(_,r)=>Array.from({length:12},(_,c)=>`<line x1="${94+c*12}" y1="${36+r*7}" x2="${90+c*12}" y2="${25+r*7}"/>`).join('')).join('')}</g></svg>`,note:'刷面有大量細金屬針，適合蓬鬆、梳開與整理被毛。'},
+  '木柄梳':{title:'木柄梳',svg:`<svg viewBox="0 0 320 170" role="img" aria-label="木柄梳示意圖"><rect x="45" y="70" width="230" height="32" rx="16" fill="#9a6b45"/><g stroke="#77727f" stroke-width="4">${Array.from({length:15},(_,i)=>`<line x1="${112+i*10}" y1="69" x2="${112+i*10}" y2="32"/>`).join('')}</g></svg>`,note:'有握柄、梳齒較集中，常用於局部整理與梳毛。'},
+  '刀梳':{title:'刀梳',svg:`<svg viewBox="0 0 320 170" role="img" aria-label="刀梳示意圖"><rect x="42" y="70" width="235" height="30" rx="14" fill="#6f6b78"/><g fill="#a7a2af">${Array.from({length:10},(_,i)=>`<path d="M${120+i*14} 70 l8 -34 l8 34z"/>`).join('')}</g></svg>`,note:'梳齒間帶切削作用，用來削薄或處理部分被毛；不是一般耳部梳理的首選。'}
+};
+function visualCandidates(q){
+  const text=`${q.prompt} ${q.options.join(' ')}`;const out=[];const seen=new Set();
+  for(const [k,v] of Object.entries(VISUAL_BREEDS)){if(text.includes(k)&&!seen.has(v.label)){seen.add(v.label);out.push({type:'breed',...v});}}
+  for(const [k,v] of Object.entries(TOOL_VISUALS)){if(text.includes(k)&&!seen.has(v.title)){seen.add(v.title);out.push({type:'tool',...v});}}
+  return out.slice(0,4);
+}
+function conceptDiagram(q){
+  const t=`${q.prompt} ${q.options.join(' ')}`;
+  if(/剪刀咬合|上齒過突|下齒過突|水平咬合/.test(t))return {title:'咬合位置圖',html:`<div class="bite-grid"><div><b>剪刀咬合</b><span>上門齒略覆下門齒</span><svg viewBox="0 0 150 90"><path d="M15 34 Q75 18 135 34" stroke="#725ee8" stroke-width="9" fill="none"/><path d="M15 50 Q75 35 135 50" stroke="#807b88" stroke-width="9" fill="none"/></svg></div><div><b>上齒過突</b><span>上顎明顯在前</span><svg viewBox="0 0 150 90"><path d="M10 32 Q75 18 140 32" stroke="#725ee8" stroke-width="9" fill="none"/><path d="M28 54 Q80 40 128 54" stroke="#807b88" stroke-width="9" fill="none"/></svg></div><div><b>下齒過突</b><span>下顎明顯在前</span><svg viewBox="0 0 150 90"><path d="M28 32 Q80 18 128 32" stroke="#725ee8" stroke-width="9" fill="none"/><path d="M10 54 Q75 40 140 54" stroke="#807b88" stroke-width="9" fill="none"/></svg></div></div>`,note:'不要只背英文，先看上下顎誰在前。'};
+  if(/飛節/.test(t))return {title:'飛節在哪裡？',html:`<svg class="body-diagram" viewBox="0 0 420 210" role="img" aria-label="犬隻側面飛節位置圖"><ellipse cx="205" cy="92" rx="105" ry="52" fill="#eceaf3"/><circle cx="83" cy="74" r="38" fill="#eceaf3"/><path d="M125 90 L110 174 M174 130 L160 185 M278 127 L312 166 L298 195 M250 127 L275 169 L266 195" stroke="#77727f" stroke-width="15" stroke-linecap="round" fill="none"/><circle cx="312" cy="166" r="10" fill="#6656e8"/><path d="M326 150 L375 116" stroke="#6656e8" stroke-width="4"/><text x="330" y="108" fill="#4b3fd0" font-size="18" font-weight="700">飛節</text></svg>`,note:'飛節是後肢下段明顯轉折的關節，從犬隻側面最好辨認。'};
+  if(/船底胸型|桶狀胸型|扁平胸型|胸型/.test(t))return {title:'胸型輪廓比較',html:`<div class="shape-grid"><div><b>桶狀</b><svg viewBox="0 0 120 90"><ellipse cx="60" cy="45" rx="38" ry="38" fill="#e7e4ef" stroke="#77727f" stroke-width="4"/></svg></div><div><b>船底</b><svg viewBox="0 0 120 90"><path d="M22 20 Q60 78 98 20 Q80 65 60 75 Q40 65 22 20Z" fill="#e7e4ef" stroke="#77727f" stroke-width="4"/></svg></div><div><b>扁平</b><svg viewBox="0 0 120 90"><ellipse cx="60" cy="45" rx="25" ry="40" fill="#e7e4ef" stroke="#77727f" stroke-width="4"/></svg></div></div>`,note:'先看胸廓橫切面的形狀，再把犬種配進去。'};
+  if(/剪刀拿的方向|剪刀拿.*方向|直毛犬修剪/.test(t))return {title:'剪刀方向示意',html:`<div class="direction-demo"><div><span class="ok-mark">✓</span><b>順著毛流</b><div class="hair-lines">↓↓↓↓↓</div><div class="scissor-line">✂ ↓</div></div><div><span class="no-mark">✕</span><b>橫向切過毛流</b><div class="hair-lines">↓↓↓↓↓</div><div class="scissor-line">✂ →</div></div></div>`,note:'直毛犬修剪時，橫向切毛容易留下明顯剪痕。'};
+  if(/瞬膜|第三眼瞼/.test(t))return {title:'瞬膜（第三眼瞼）位置',html:`<svg class="eye-diagram" viewBox="0 0 360 170"><path d="M35 85 Q180 15 325 85 Q180 155 35 85Z" fill="#fff" stroke="#77727f" stroke-width="5"/><circle cx="185" cy="85" r="42" fill="#7d6a55"/><circle cx="185" cy="85" r="20" fill="#222"/><path d="M42 85 Q75 60 104 82 Q78 108 42 85Z" fill="#e7b8c2" stroke="#b36b7b" stroke-width="3"/><path d="M91 54 L52 25" stroke="#6656e8" stroke-width="4"/><text x="22" y="20" font-size="17" fill="#4b3fd0" font-weight="700">瞬膜／第三眼瞼</text></svg>`,note:'位在眼睛內側靠鼻子的角落；正常清醒時不應大面積明顯外露。'};
+  return null;
+}
+function visualAidHtml(q,{compact=false}={}){
+  const items=visualCandidates(q),diagram=conceptDiagram(q);if(!items.length&&!diagram)return '';
+  const cards=items.map(x=>x.type==='breed'?`<figure class="visual-photo"><img src="${esc(x.url)}" alt="${esc(x.label)}參考照片" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add('image-failed')"><figcaption><b>${esc(x.label)}</b><span>${esc(x.note)}</span><small>圖片載入失敗時仍可看文字重點；連網後重試即可。</small></figcaption></figure>`:`<div class="visual-tool"><div class="tool-svg">${x.svg}</div><b>${esc(x.title)}</b><span>${esc(x.note)}</span></div>`).join('');
+  return `<div class="visual-aid ${compact?'compact':''}"><div class="visual-aid-title">看圖學這題</div>${diagram?`<div class="concept-diagram"><b>${esc(diagram.title)}</b>${diagram.html}<p>${esc(diagram.note)}</p></div>`:''}${cards?`<div class="visual-grid">${cards}</div>`:''}</div>`;
+}
+
 function teacherTags(q){
   const text=`${q.prompt} ${q.options.join(' ')}`;const tags=[];
   if(/何者為非|何者非|錯誤|不正確|不恰當|不是|非屬|不得|無需|不會|不可|不可能/.test(q.prompt))tags.push('反向題');
@@ -513,19 +562,17 @@ function teacherNote(q){
   return {lessonType,detailLevel,concept,why,memory,tags,answerText,choices};
 }
 function teacherHtml(q,firstExposure=false,unknown=false,guessed=false){
-  const n=teacherNote(q);
-  const tags=[n.lessonType,n.detailLevel,...n.tags].filter(Boolean);
-  const tagHtml=tags.length?`<div class="teacher-tags">${tags.map(t=>`<span class="pill">${esc(t)}</span>`).join('')}</div>`:'';
-  const status=unknown?'你這次選「不知道」，這題會列入今日檢討並在明天再出。':guessed?'雖然答對，但你標記為猜的，所以不算真正掌握，明天會再考。':firstExposure?'這是第一次看到；即使答對，初學模式仍會在明天安排一次確認。':'答對後會依熟練度拉長下次複習間隔。';
-  const reverse=n.tags.includes('反向題')?'<div class="reverse-tip"><b>先注意：</b>這題問的是「不／非／錯誤」的那一個，別把正確敘述反而選下去。</div>':'';
-  const concept=n.concept?`<div class="concept-tip"><b>這題在學什麼：</b>${esc(n.concept)}</div>`:'';
-  const choices=n.choices?.length?`<div class="choice-breakdown"><b>四個選項逐一看：</b>${n.choices.map((x,i)=>`<div class="choice-line"><span>${LETTERS[i]}</span><p>${esc(x)}</p></div>`).join('')}</div>`:'';
-  const incomplete=n.detailLevel==='待補完整詳解'?'<div class="teacher-warning">這題目前只有題庫標答與基礎提示，還不能算「完整學會」。如果你看完仍說不出原因，請按下面標記給老師。</div>':'';
-  return `<div class="teacher-card"><div class="teacher-title">老師講解</div>${tagHtml}${reverse}${concept}<p><b>正確答案：${LETTERS[q.answer-1]}　${esc(n.answerText)}</b></p><p><b>為什麼：</b>${esc(n.why)}</p>${choices}<div class="memory-tip"><b>怎麼記：</b>${esc(n.memory)}</div>${incomplete}<p class="teacher-status">${esc(status)}</p><small>「正確答案」來自題庫；講解與記憶提示是理解用整理，不是官方題解。</small><div class="teacher-help-row"><button id="needHelpBtn" class="ghost small">${getProgress(q.originId||q.id).needsHelp?'✓ 已標記：還不懂':'講解還是不懂，標記給老師'}</button></div></div>`;
+  const n=teacherNote(q),realDetail=n.detailLevel!=='待補完整詳解';
+  const status=unknown?'這次選「不知道」：已排進今日檢討，明天也會再確認。':guessed?'這題雖然答對但屬於猜對，明天會再考。':firstExposure?'第一次看到的題目，明天會再確認一次。':'';
+  const reverse=n.tags.includes('反向題')?'<div class="reverse-tip"><b>先注意：</b>題目問的是「不／非／錯誤」的那一個。</div>':'';
+  const choices=n.choices?.length?`<details class="learn-details"><summary>四個選項逐一看</summary>${n.choices.map((x,i)=>`<div class="choice-line"><span>${LETTERS[i]}</span><p>${esc(x)}</p></div>`).join('')}</details>`:'';
+  const why=realDetail&&n.why&&!/^題庫答案|^本題題庫答案|^題庫指定答案|^這題的考試標答/.test(n.why)?`<div class="why-box"><b>為什麼？</b><p>${esc(n.why)}</p></div>`:'';
+  const visual=visualAidHtml(q,{compact:true});
+  return `<div class="learn-card"><div class="learn-title">看懂這題</div>${reverse}<div class="answer-line"><b>答案：${LETTERS[q.answer-1]}　${esc(n.answerText)}</b></div>${visual}${why}${choices}<div class="memory-tip"><b>考試記法：</b>${esc(n.memory)}</div>${!realDetail?'<div class="teacher-warning">這題目前沒有硬塞制式講解；先用圖解與答案建立概念，之後再補真正有內容的原因。</div>':''}${status?`<p class="teacher-status">${esc(status)}</p>`:''}<div class="teacher-help-row"><button id="needHelpBtn" class="ghost small">${getProgress(q.originId||q.id).needsHelp?'✓ 已標記：需要補教材':'這題還看不懂，標記補教材'}</button></div></div>`;
 }
 
 async function wireTeacherAction(q){
-  const btn=document.querySelector('#needHelpBtn');if(!btn)return;btn.onclick=async()=>{const pid=q.originId||q.id,p={...getProgress(pid),needsHelp:!getProgress(pid).needsHelp};await saveProgress(p);btn.textContent=p.needsHelp?'✓ 已標記：還不懂':'講解還是不懂，標記給老師';};
+  const btn=document.querySelector('#needHelpBtn');if(!btn)return;btn.onclick=async()=>{const pid=q.originId||q.id,p={...getProgress(pid),needsHelp:!getProgress(pid).needsHelp};await saveProgress(p);btn.textContent=p.needsHelp?'✓ 已標記：需要補教材':'這題還看不懂，標記補教材';};
 }
 
 function shuffleQuestionChoices(q){
@@ -546,9 +593,10 @@ function renderQuiz(){
   const s=state.session;if(!s)return renderStudy();if(s.index>=s.questions.length)return finishQuiz();const q=s.questions[s.index],p=getProgress(q.originId||q.id),v=document.querySelector('#view-study');
   const timeHtml=s.seconds!=null?`<span id="timer" class="pill warn">${formatTime(Math.max(0,s.seconds-Math.floor((Date.now()-s.startedAt)/1000)))}</span>`:`<span class="pill">${s.index+1}/${s.questions.length}</span>`;
   const seen=exposureCount(p)>0;
-  v.innerHTML=`<div class="question-head"><div><div class="eyebrow">${esc(s.title)}</div><div class="question-no">${esc(q.sectionName)} · 第 ${q.number} 題</div></div>${timeHtml}</div><div class="progress" style="margin:12px 0 18px"><i style="width:${pct(s.index,s.questions.length)}%"></i></div><div class="card"><div class="row" style="justify-content:space-between"><span class="pill ${(p.wrong||p.unknown)?'bad':''}">${seen?`看過 ${exposureCount(p)} 次 · 錯 ${p.wrong||0} · 不知道 ${p.unknown||0}`:'第一次出現'}</span><button id="starQuestion" class="ghost small">${p.starred?'★ 已收藏':'☆ 收藏'}</button></div><div class="question-text">${esc(q.prompt)}</div>${q.image?`<figure class="question-figure"><img src="${esc(q.image)}" alt="${esc(q.imageAlt||'原題圖示')}" loading="eager"></figure>`:(q.imageLikely?'<div class="banner">這題含原題圖示；請以題目圖片為準。</div>':'')}<div class="options">${q.options.map((o,i)=>`<button class="option" data-answer="${i+1}"><span class="letter">${LETTERS[i]}</span><span>${esc(o)}</span></button>`).join('')}</div><div id="feedback"></div>${s.noFeedback?'':`<div class="learning-actions"><button id="unknownBtn" class="secondary">完全不知道，直接學這題</button><button id="guessBtn" class="ghost">不確定／這題我是猜的</button></div>`}<div class="quiz-actions"><button id="nextBtn" class="primary" disabled>${s.index===s.questions.length-1?'完成':'下一題'}</button></div></div><button id="quitQuiz" class="ghost wide">先離開</button>`;
+  v.innerHTML=`<div class="question-head"><div><div class="eyebrow">${esc(s.title)}</div><div class="question-no">${esc(q.sectionName)} · 第 ${q.number} 題</div></div>${timeHtml}</div><div class="progress" style="margin:12px 0 18px"><i style="width:${pct(s.index,s.questions.length)}%"></i></div><div class="card"><div class="row" style="justify-content:space-between"><span class="pill ${(p.wrong||p.unknown)?'bad':''}">${seen?`看過 ${exposureCount(p)} 次 · 錯 ${p.wrong||0} · 不知道 ${p.unknown||0}`:'第一次出現'}</span><button id="starQuestion" class="ghost small">${p.starred?'★ 已收藏':'☆ 收藏'}</button></div><div class="question-text">${esc(q.prompt)}</div>${q.image?`<figure class="question-figure"><img src="${esc(q.image)}" alt="${esc(q.imageAlt||'原題圖示')}" loading="eager"></figure>`:(q.imageLikely?'<div class="banner">這題含原題圖示；請以題目圖片為準。</div>':'')}${!s.noFeedback&&visualAidHtml(q)?`<button id="showVisualBtn" class="visual-toggle ghost wide">看圖片／圖解再作答</button><div id="preVisual" hidden>${visualAidHtml(q)}</div>`:''}<div class="options">${q.options.map((o,i)=>`<button class="option" data-answer="${i+1}"><span class="letter">${LETTERS[i]}</span><span>${esc(o)}</span></button>`).join('')}</div><div id="feedback"></div>${s.noFeedback?'':`<div class="learning-actions"><button id="unknownBtn" class="secondary">完全不知道，直接學這題</button><button id="guessBtn" class="ghost">不確定／這題我是猜的</button></div>`}<div class="quiz-actions"><button id="nextBtn" class="primary" disabled>${s.index===s.questions.length-1?'完成':'下一題'}</button></div></div><button id="quitQuiz" class="ghost wide">先離開</button>`;
   [...v.querySelectorAll('.option')].forEach(btn=>btn.onclick=()=>selectAnswer(Number(btn.dataset.answer)));
   v.querySelector('#unknownBtn')?.addEventListener('click',()=>revealUnknown());
+  v.querySelector('#showVisualBtn')?.addEventListener('click',e=>{const box=v.querySelector('#preVisual');box.hidden=!box.hidden;e.currentTarget.textContent=box.hidden?'看圖片／圖解再作答':'收起圖片／圖解';});
   v.querySelector('#guessBtn')?.addEventListener('click',()=>toggleGuess());
   v.querySelector('#nextBtn').onclick=()=>advanceQuiz();v.querySelector('#quitQuiz').onclick=()=>{if(s.mode==='mock')confirmAction('離開模擬考？','目前進度不會計入模考成績。',()=>{clearQuizTimer();state.session=null;navigate('exam');});else{clearQuizTimer();state.session=null;navigate('home');}};
   v.querySelector('#starQuestion').onclick=async()=>{const pid=q.originId||q.id,pp={...getProgress(pid),starred:!getProgress(pid).starred};await saveProgress(pp);v.querySelector('#starQuestion').textContent=pp.starred?'★ 已收藏':'☆ 收藏';};
@@ -609,7 +657,7 @@ function confirmAction(title,text,fn){const d=document.querySelector('#confirmDi
 
 async function init(){
   db=await openDB();state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));
-  // v7 重新套用內建 647 題；程式更新不會清除作答／錯題紀錄。
+  // v8 重新套用內建 647 題；程式更新不會清除作答／錯題紀錄。
   if(state.questions.filter(q=>q.kind==='professional').length!==SOURCES.professional.expected||getMeta('bundledProfessionalVersion')!==APP_VERSION){
     try{await loadBundledProfessional(()=>{});await setMeta('bundledProfessionalVersion',APP_VERSION);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);}catch(e){console.warn('bundled professional bank load failed',e);}
   }
