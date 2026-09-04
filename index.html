@@ -4,17 +4,17 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#6b5cff" />
-  <meta name="description" content="13900 寵物美容丙級每日刷題、錯題複習、歷屆試題與模擬考 PWA" />
+  <meta name="description" content="13900 寵物美容丙級與寵物急救：循環不重複刷題、錯題複習與模擬考 PWA" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles.css" />
-  <title>寵物美容丙級｜私人補習班</title>
+  <title>寵物美容丙級＋寵物急救｜刷題</title>
 </head>
 <body>
   <header class="topbar">
     <div>
-      <div class="eyebrow">13900 PET GROOMING · 丙級</div>
-      <h1>我的寵物美容補習班</h1>
+      <div class="eyebrow">13900 寵物美容丙級 · 寵物急救</div>
+      <h1>我的刷題 PWA</h1>
     </div>
     <button id="installBtn" class="ghost small" hidden>安裝到手機</button>
   </header>
@@ -43,10 +43,10 @@
         <div><div class="eyebrow">QUESTION BANK</div><h2>題庫同步／更新</h2></div>
         <button value="cancel" class="icon-btn" aria-label="關閉">×</button>
       </div>
-      <p class="muted">專業 647 題已直接內建在 App；共同科目可另外同步。完成後，題目與學習紀錄會保存在本機，可離線刷題。</p>
+      <p class="muted">美容專業 647 題與寵物急救 80 題已直接內建；兩套每日作業完全分開。共同科目可另外同步，供自由刷題與丙級模考。學習紀錄保存在本機，可離線使用。</p>
       <div id="syncStatus" class="sync-status"></div>
       <div class="stack">
-        <button type="button" id="autoSyncBtn" class="primary">同步完整題庫</button>
+        <button type="button" id="autoSyncBtn" class="primary">同步全部題庫</button>
         <button type="button" id="repairProfessionalBtn" class="secondary">修復內建 647 題</button>
         <button type="button" id="importProfessionalBtn" class="secondary">匯入新版 13900 題庫 PDF</button>
         <input id="professionalFile" type="file" accept="application/pdf" hidden />
@@ -54,7 +54,7 @@
       </div>
       <details>
         <summary>題庫更新說明</summary>
-        <p>目前專業 647 題已內建。未來官方題庫改版時，再用「匯入新版 13900 題庫 PDF」更新即可；App 會在手機本機解析，不會上傳你的檔案。</p>
+        <p>美容 647 題為 13900 題庫；急救題為依公開急救課程主題整理的自建練習題，並非官方考古題。未來 13900 題庫改版時，可匯入新版 PDF；永久排除清單不會因同步而消失。</p>
         <a class="text-link" href="https://onlinetest.tw/btest/collection/13900/139003A13.pdf" target="_blank" rel="noreferrer">開啟 13900 公開題庫 PDF</a>
       </details>
     </form>

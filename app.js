@@ -7,8 +7,10 @@ const STORE_P='progress';
 const STORE_M='meta';
 const STORE_B='snapshots';
 const LETTERS=['A','B','C','D'];
-const APP_VERSION='v8';
+const APP_VERSION='v11';
 const BUNDLED_PROF_URL='./data/professional-13900.json';
+const FIRSTAID_URL='./data/firstaid-practice.json';
+const DEFAULT_EXCLUDED_IDS=["13900-06-011", "13900-06-012", "13900-06-014", "13900-06-015", "13900-06-018", "13900-06-019", "13900-06-020", "13900-06-021", "13900-06-022", "13900-06-023", "13900-06-025", "13900-06-026", "13900-06-027", "13900-06-028", "13900-06-029", "13900-06-030", "13900-06-031", "13900-06-032", "13900-06-033", "13900-06-034", "13900-06-035", "13900-06-036", "13900-06-037", "13900-06-038", "13900-06-039", "13900-06-040", "13900-06-041", "13900-06-042"];
 const SECTION_NAMES=Object.fromEntries(SOURCES.professional.sections.map(([code,name])=>[code,name]));
 const COMMON_NAMES=Object.fromEntries(SOURCES.common.map(x=>[x.code,x.label]));
 const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei'}).format(new Date());
@@ -35,6 +37,20 @@ async function clearStore(store){return new Promise((resolve,reject)=>{const r=t
 async function setMeta(key,value){state.meta[key]=value;await put(STORE_M,{key,value});}
 function getMeta(key,fallback=null){return state.meta[key] ?? fallback;}
 
+function excludedIdSet(){return new Set((getMeta('excludedQuestionIds',[])||[]).map(String));}
+function isExcluded(id){return excludedIdSet().has(String(id));}
+function activeQuestions(list){const ex=excludedIdSet();return (list||[]).filter(q=>q.active!==false&&!ex.has(String(q.id)));}
+async function reloadQuestions(){state.questions=activeQuestions(await getAll(STORE_Q));return state.questions;}
+async function migrateExclusions(){
+  const keys=['excludedQuestionIds','deletedQuestionIds','removedQuestionIds','excludedQuestions'];const ids=new Set(DEFAULT_EXCLUDED_IDS);
+  for(const k of keys){const v=getMeta(k,[]);if(Array.isArray(v))for(const x of v){if(typeof x==='string')ids.add(x);else if(x?.id)ids.add(String(x.id));}}
+  for(const q of await getAll(STORE_Q))if(q.active===false)ids.add(String(q.id));
+  await setMeta('excludedQuestionIds',[...ids].sort());
+}
+function excludedCount(kind){const ex=excludedIdSet();if(kind==='professional')return [...ex].filter(id=>id.startsWith('13900-')).length;if(kind==='firstaid')return [...ex].filter(id=>id.startsWith('FIRSTAID-')).length;return 0;}
+function customExcludedIds(){const locked=new Set(DEFAULT_EXCLUDED_IDS);return [...excludedIdSet()].filter(id=>!locked.has(id));}
+
+
 function defaultProgress(id){return {id,attempts:0,correct:0,wrong:0,unknown:0,streak:0,level:0,lastAt:null,nextDue:null,lastAnswer:null,guessed:0,starred:false,needsHelp:false,history:[]};}
 function exposureCount(p){return (p.attempts||0)+(p.unknown||0);}
 function getProgress(id){return state.progress.get(id)||defaultProgress(id);}
@@ -42,7 +58,7 @@ async function saveProgress(p){state.progress.set(p.id,p);await put(STORE_P,p);q
 
 
 function backupPayload(){
-  return {version:2,appVersion:APP_VERSION,exportedAt:new Date().toISOString(),progress:[...state.progress.values()],meta:{...state.meta}};
+  return {version:3,appVersion:APP_VERSION,exportedAt:new Date().toISOString(),progress:[...state.progress.values()],meta:{...state.meta}};
 }
 async function writeAutoSnapshot(reason='自動保存'){
   if(!db||snapshotRunning)return;
@@ -73,7 +89,7 @@ async function autoSyncCommonInBackground(){
   try{
     await loadPdfJs();
     for(const src of SOURCES.common){if((bankInfo().byCommon[src.code]||0)<90)await syncOneCommon(src,()=>{});}
-    state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);
+    await reloadQuestions();
     renderHome();queueAutoSnapshot('共同科目首次同步');
   }catch(e){console.warn('background common sync failed',e);}
 }
@@ -180,6 +196,19 @@ async function loadBundledProfessional(status=()=>{}){
   status(`專業題庫已修復：${qs.length}/647`);
   return qs;
 }
+
+async function loadBundledFirstAid(status=()=>{}){
+  status('載入寵物急救練習題庫…');
+  const r=await fetch(FIRSTAID_URL,{cache:'no-store'});if(!r.ok)throw new Error(`急救題庫 HTTP ${r.status}`);
+  const data=await r.json(),qs=Array.isArray(data?.questions)?data.questions:[];
+  if(qs.length!==80)throw new Error(`急救題庫只有 ${qs.length}/80 題`);
+  const bad=qs.find(q=>!q.id||!q.prompt||!Array.isArray(q.options)||q.options.length!==4||!q.options.every(Boolean)||![1,2,3,4].includes(Number(q.answer)));
+  if(bad)throw new Error(`急救題庫格式異常：${bad.id||'未知題號'}`);
+  await replaceQuestionKind('firstaid',qs);
+  await setMeta('firstAidBank',{at:new Date().toISOString(),count:qs.length,version:data.version||APP_VERSION,nonOfficial:true});
+  status(`寵物急救練習題庫已載入：${qs.length} 題`);return qs;
+}
+
 async function importProfessionalBuffer(buffer,status){
   status('正在解析專業題庫 PDF…');
   const text=await pdfToText(buffer,(p,n)=>status(`解析專業題庫：${p}/${n} 頁`));
@@ -199,146 +228,98 @@ async function syncOneCommon(src,status){
   await bulkPut(STORE_Q,qs);await setMeta(`commonSync:${src.code}`,{at:new Date().toISOString(),count:qs.length,version:src.version});return qs;
 }
 async function replaceQuestionKind(kind,qs){
-  const all=await getAll(STORE_Q);const old=all.filter(q=>q.kind===kind);for(const q of old)await del(STORE_Q,q.id);await bulkPut(STORE_Q,qs);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);
+  const all=await getAll(STORE_Q);const old=all.filter(q=>q.kind===kind);for(const q of old)await del(STORE_Q,q.id);await bulkPut(STORE_Q,qs);await reloadQuestions();
 }
 
+
 function bankInfo(){
-  const p=state.questions.filter(q=>q.kind==='professional');const common=state.questions.filter(q=>q.kind==='common');
+  const p=state.questions.filter(q=>q.kind==='professional'),fa=state.questions.filter(q=>q.kind==='firstaid'),common=state.questions.filter(q=>q.kind==='common');
   const byCommon=Object.fromEntries(SOURCES.common.map(s=>[s.code,common.filter(q=>q.subjectCode===s.code).length]));
-  return {professional:p.length,common:common.length,byCommon,readyProfessional:p.length>=647,readyCommon:SOURCES.common.every(s=>(byCommon[s.code]||0)>=90)};
+  const ep=excludedCount('professional'),ef=excludedCount('firstaid');
+  return {professional:p.length,firstaid:fa.length,common:common.length,byCommon,excludedProfessional:ep,excludedFirstAid:ef,readyProfessional:p.length+ep>=647,readyFirstAid:fa.length+ef>=80,readyCommon:SOURCES.common.every(s=>(byCommon[s.code]||0)>=90)};
 }
-function attempts(){return [...state.progress.values()].reduce((sum,p)=>sum+(p.attempts||0),0);}
-function exposures(){return [...state.progress.values()].reduce((sum,p)=>sum+exposureCount(p),0);}
-function answeredUnique(){return [...state.progress.values()].filter(p=>exposureCount(p)>0).length;}
-function overallCorrect(){let a=0,c=0;for(const p of state.progress.values()){a+=p.attempts||0;c+=p.correct||0;}return {a,c,rate:pct(c,a)};}
-function dueQuestions(){const now=Date.now();return state.questions.filter(q=>{const p=getProgress(q.id);return p.nextDue&&new Date(p.nextDue).getTime()<=now;});}
-function wrongQuestions(){return state.questions.filter(q=>(getProgress(q.id).wrong||0)>0&&getProgress(q.id).level<5);}
+function attempts(kind=null){return [...state.progress.values()].reduce((sum,p)=>{const q=state.questions.find(x=>x.id===p.id);return sum+(!kind||q?.kind===kind?(p.attempts||0):0);},0);}
+function exposureCount(p){return (p.attempts||0)+(p.unknown||0);}
+function answeredUnique(kind=null){return state.questions.filter(q=>(!kind||q.kind===kind)&&exposureCount(getProgress(q.id))>0).length;}
+function overallCorrect(kind=null){let a=0,c=0;for(const q of state.questions){if(kind&&q.kind!==kind)continue;const p=getProgress(q.id);a+=p.attempts||0;c+=p.correct||0;}return {a,c,rate:pct(c,a)};}
+function latestHistory(p){return (p.history||[]).slice(-1)[0]||null;}
+function pendingReview(kind=null){return state.questions.filter(q=>{if(kind&&q.kind!==kind)return false;const h=latestHistory(getProgress(q.id));return !!h&&(h.unknown||!h.correct);});}
+function wrongEver(kind=null){return state.questions.filter(q=>(!kind||q.kind===kind)&&((getProgress(q.id).wrong||0)+(getProgress(q.id).unknown||0)>0));}
 function unseen(kind){return state.questions.filter(q=>(!kind||q.kind===kind)&&exposureCount(getProgress(q.id))===0);}
 function streakDays(){
   const dates=new Set([...state.progress.values()].flatMap(p=>(p.history||[]).map(h=>h.date)).filter(Boolean));let d=new Date(`${today()}T12:00:00+08:00`),n=0;
   while(true){const key=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei'}).format(d);if(!dates.has(key))break;n++;d=new Date(d.getTime()-dayMs);}return n;
 }
-function categoryStats(){
-  const cats={};for(const q of state.questions){const key=q.sectionName;cats[key]??={name:key,attempts:0,correct:0,wrong:0,unknown:0,total:0,seen:0};cats[key].total++;const p=getProgress(q.id);cats[key].attempts+=p.attempts||0;cats[key].correct+=p.correct||0;cats[key].wrong+=p.wrong||0;cats[key].unknown+=p.unknown||0;if(exposureCount(p))cats[key].seen++;}
-  return Object.values(cats).map(x=>({...x,rate:pct(x.correct,x.attempts)})).sort((a,b)=>(a.attempts? a.rate:101)-(b.attempts?b.rate:101));
+function categoryStats(kind=null){
+  const cats={};for(const q of state.questions){if(kind&&q.kind!==kind)continue;const key=q.sectionName;cats[key]??={name:key,kind:q.kind,attempts:0,correct:0,wrong:0,unknown:0,total:0,seen:0};cats[key].total++;const p=getProgress(q.id);cats[key].attempts+=p.attempts||0;cats[key].correct+=p.correct||0;cats[key].wrong+=p.wrong||0;cats[key].unknown+=p.unknown||0;if(exposureCount(p))cats[key].seen++;}
+  return Object.values(cats).map(x=>({...x,rate:pct(x.correct,x.attempts)})).sort((a,b)=>(a.attempts?a.rate:101)-(b.attempts?b.rate:101));
 }
-function todaysHistory(){return [...state.progress.values()].flatMap(p=>(p.history||[]).filter(h=>h.date===today()).map(h=>({...h,id:p.id})));}
-function todaysSummary(){
-  const h=todaysHistory(), answered=h.filter(x=>!x.unknown), correct=answered.filter(x=>x.correct), wrong=answered.filter(x=>!x.correct);
-  return {count:h.length,answered:answered.length,correct:correct.length,wrong:wrong.length,unknown:h.filter(x=>x.unknown).length,guessed:h.filter(x=>x.guessed&&x.correct).length,rate:pct(correct.length,answered.length)};
+function todaysHistory(kind=null){return [...state.progress.values()].flatMap(p=>(p.history||[]).filter(h=>h.date===today()).map(h=>({...h,id:p.id}))).filter(h=>{if(!kind)return true;const q=state.questions.find(x=>x.id===h.id);return q?.kind===kind;});}
+function todaysSummary(kind=null){
+  const h=todaysHistory(kind),answered=h.filter(x=>!x.unknown),correct=answered.filter(x=>x.correct),wrong=answered.filter(x=>!x.correct);
+  return {count:h.length,answered:answered.length,correct:correct.length,wrong:wrong.length,unknown:h.filter(x=>x.unknown).length,rate:pct(correct.length,answered.length)};
 }
-function latestTodayEventById(){
-  const m=new Map();for(const h of todaysHistory())m.set(h.id,h);return m;
+function dailyMode(kind){return kind==='firstaid'?'daily-firstaid':'daily-professional';}
+function dailyAnsweredToday(kind){return todaysHistory(kind).filter(h=>h.mode===dailyMode(kind)).length;}
+function cycleKey(kind){return `cycleDeck:${kind}`;}
+function poolForKind(kind){return state.questions.filter(q=>q.kind===kind);}
+async function ensureCycle(kind,{renewIfComplete=false}={}){
+  const ids=poolForKind(kind).map(q=>q.id),idSet=new Set(ids);let d=getMeta(cycleKey(kind),null),changed=false;
+  if(!d||!Array.isArray(d.remaining)||!Array.isArray(d.seen)){d={cycle:1,remaining:shuffle(ids),seen:[],startedAt:new Date().toISOString()};changed=true;}
+  d={...d,remaining:d.remaining.filter(id=>idSet.has(id)),seen:d.seen.filter(id=>idSet.has(id))};
+  const known=new Set([...d.remaining,...d.seen]);const added=ids.filter(id=>!known.has(id));if(added.length){d.remaining.push(...shuffle(added));changed=true;}
+  if(renewIfComplete&&d.remaining.length===0&&ids.length){d={cycle:(d.cycle||1)+1,remaining:shuffle(ids),seen:[],startedAt:new Date().toISOString()};changed=true;}
+  if(changed)await setMeta(cycleKey(kind),d);return d;
 }
-function todaysReviewQuestions(){
-  const latest=latestTodayEventById();return state.questions.filter(q=>{const h=latest.get(q.id);return !!h&&(h.unknown||!h.correct||h.guessed);});
+function cycleInfo(kind){const d=getMeta(cycleKey(kind),null),total=poolForKind(kind).length;if(!d)return {cycle:1,remaining:total,seen:0,total,complete:false};const rem=(d.remaining||[]).filter(id=>poolForKind(kind).some(q=>q.id===id)).length;return {cycle:d.cycle||1,remaining:rem,seen:Math.max(0,total-rem),total,complete:total>0&&rem===0};}
+async function consumeCycle(kind,id){const d=await ensureCycle(kind);if(!d)return;const before=d.remaining.length;d.remaining=d.remaining.filter(x=>x!==id);if(!d.seen.includes(id))d.seen.push(id);if(d.remaining.length!==before)await setMeta(cycleKey(kind),d);}
+async function startDailyKind(kind){
+  const target=kind==='firstaid'?Number(getMeta('dailyFirstAid',20)):Number(getMeta('dailyProfessional',50)),done=dailyAnsweredToday(kind);if(done>=target){toast('今天這份作業已完成');return;}
+  const d=await ensureCycle(kind,{renewIfComplete:true}),need=Math.max(0,target-done),ids=d.remaining.slice(0,Math.min(need,d.remaining.length)),map=new Map(poolForKind(kind).map(q=>[q.id,q])),qs=ids.map(id=>map.get(id)).filter(Boolean);
+  if(!qs.length){toast('目前沒有可出的題目');return;}startQuiz(qs,dailyMode(kind),kind==='firstaid'?'寵物急救每日作業':'寵物美容丙級每日作業');
 }
-function todaysReviewSummary(){
-  const latest=latestTodayEventById();let wrong=0,guessed=0,unknown=0;for(const h of latest.values()){if(h.unknown)unknown++;else if(!h.correct)wrong++;else if(h.guessed)guessed++;}return {wrong,guessed,unknown,total:wrong+guessed+unknown};
-}
-function firstSeenTodayCount(kind){
-  return state.questions.filter(q=>{if(kind&&q.kind!==kind)return false;const p=getProgress(q.id),h=p.history||[];return h.length>0&&h[0].date===today();}).length;
-}
-function dailyPlan(){
-  const proTarget=Number(getMeta('dailyProfessional',50)),commonTarget=Number(getMeta('dailyCommon',10)),due=dueQuestions();
-  const proDone=firstSeenTodayCount('professional'),commonDone=firstSeenTodayCount('common');
-  const proRemaining=Math.min(Math.max(0,proTarget-proDone),unseen('professional').length);
-  const commonRemaining=Math.min(Math.max(0,commonTarget-commonDone),unseen('common').length);
-  return {proTarget,commonTarget,proDone,commonDone,proRemaining,commonRemaining,dueCount:due.length,reviewCount:todaysReviewQuestions().length};
-}
-function buildDailySession(){
-  const plan=dailyPlan();const due=sample(dueQuestions(),Math.min(30,dueQuestions().length));
-  const pro=sample(unseen('professional').filter(q=>!due.some(d=>d.id===q.id)),plan.proRemaining);
-  const com=sample(unseen('common').filter(q=>!due.some(d=>d.id===q.id)),plan.commonRemaining);
-  return [...due,...pro,...com];
-}
-
 async function recordAnswer(q,chosen,opts={}){
-  const guessed=!!opts.guessed,unknown=!!opts.unknown,trackId=q.originId||q.id;
-  const old=getProgress(trackId),p={...old,history:[...(old.history||[])]};const firstExposure=exposureCount(old)===0;const prevToday=(old.history||[]).slice(-1)[0];const hadFlagToday=!!prevToday&&prevToday.date===today()&&(prevToday.unknown||!prevToday.correct||prevToday.guessed);const now=new Date().toISOString();
-  p.lastAt=now;p.lastAnswer=unknown?null:chosen;
-  if(unknown){
-    p.unknown=(p.unknown||0)+1;p.streak=0;p.level=0;p.nextDue=new Date(Date.now()+dayMs).toISOString();
-    p.history.push({date:today(),at:now,chosen:null,answer:q.answer,correct:false,guessed:false,unknown:true,firstTime:firstExposure});
-    p.history=p.history.slice(-80);await saveProgress(p);return {correct:false,unknown:true,firstExposure};
-  }
-  const correct=chosen===q.answer;p.attempts=(p.attempts||0)+1;
-  p.history.push({date:today(),at:now,chosen,answer:q.answer,correct,guessed,unknown:false,firstTime:firstExposure});p.history=p.history.slice(-80);
-  if(correct){
-    p.correct=(p.correct||0)+1;p.streak=(p.streak||0)+1;
-    if(guessed)p.guessed=(p.guessed||0)+1;
-    if(firstExposure||guessed||hadFlagToday){p.level=Math.min(p.level||0,1);p.nextDue=new Date(Date.now()+dayMs).toISOString();}
-    else{p.level=Math.min(5,(p.level||0)+1);const intervals=[1,3,7,14,30,60];p.nextDue=new Date(Date.now()+intervals[p.level]*dayMs).toISOString();}
-  }else{p.wrong=(p.wrong||0)+1;p.streak=0;p.level=0;p.nextDue=new Date(Date.now()+dayMs).toISOString();}
-  await saveProgress(p);return {correct,unknown:false,firstExposure};
+  const unknown=!!opts.unknown,trackId=q.originId||q.id,mode=opts.mode||state.session?.mode||'practice';
+  const old=getProgress(trackId),p={...old,history:[...(old.history||[])]},now=new Date().toISOString();p.lastAt=now;p.lastAnswer=unknown?null:chosen;
+  if(unknown){p.unknown=(p.unknown||0)+1;p.streak=0;p.needsReview=true;p.history.push({date:today(),at:now,chosen:null,answer:q.answer,correct:false,unknown:true,mode});}
+  else{const correct=chosen===q.answer;p.attempts=(p.attempts||0)+1;p.history.push({date:today(),at:now,chosen,answer:q.answer,correct,unknown:false,mode});if(correct){p.correct=(p.correct||0)+1;p.streak=(p.streak||0)+1;p.needsReview=false;}else{p.wrong=(p.wrong||0)+1;p.streak=0;p.needsReview=true;}}
+  p.history=p.history.slice(-160);await saveProgress(p);
+  if(mode==='daily-professional')await consumeCycle('professional',trackId);if(mode==='daily-firstaid')await consumeCycle('firstaid',trackId);
+  return {correct:!unknown&&chosen===q.answer,unknown};
 }
-async function markLatestAnswerGuessed(q){
-  const trackId=q.originId||q.id,p={...getProgress(trackId),history:[...(getProgress(trackId).history||[])]};const i=p.history.length-1;if(i<0)return;
-  const h={...p.history[i]};if(h.date!==today()||h.unknown||!h.correct||h.guessed)return;
-  h.guessed=true;p.history[i]=h;p.guessed=(p.guessed||0)+1;p.level=Math.min(p.level||0,1);p.nextDue=new Date(Date.now()+dayMs).toISOString();await saveProgress(p);
-}
+function planFor(kind){const target=kind==='firstaid'?Number(getMeta('dailyFirstAid',20)):Number(getMeta('dailyProfessional',50)),done=dailyAnsweredToday(kind),cycle=cycleInfo(kind);return {target,done,remainingToday:Math.max(0,target-done),cycle};}
 
 function renderHome(){
-  const v=document.querySelector('#view-home'),b=bankInfo(),daily=todaysSummary(),plan=dailyPlan(),review=todaysReviewSummary(),oc=overallCorrect(),cats=categoryStats().filter(x=>x.attempts>=3),weak=cats[0];
-  const ready=b.readyProfessional&&b.readyCommon;const dailyRemaining=plan.proRemaining+plan.commonRemaining+plan.dueCount;
-  const todayDesc=daily.count?`今天碰過 ${daily.count} 次：答對 ${daily.correct}、答錯 ${daily.wrong}${daily.unknown?`、不知道 ${daily.unknown}`:''}${daily.guessed?`、猜對 ${daily.guessed}`:''}`:'第一次看題也算學習；不知道就直接看答案與講解。';
-  const startLabel=dailyRemaining?'繼續今天的作業':(review.total?'開始今日檢討':'今天的新題已完成');
+  const v=document.querySelector('#view-home'),b=bankInfo(),pro=planFor('professional'),fa=planFor('firstaid'),proToday=todaysSummary('professional'),faToday=todaysSummary('firstaid'),proWrong=pendingReview('professional').length,faWrong=pendingReview('firstaid').length,oc=overallCorrect();
   v.innerHTML=`
-    <div class="hero">
-      <div class="eyebrow" style="color:#ded9ff">TODAY'S CLASS · 初學模式</div>
-      <h2>${daily.count?`今天已學習 ${daily.count} 題次`:'今天的作業還沒寫'}</h2>
-      <p>${todayDesc}</p>
-      <div class="metrics"><div class="metric"><b>${streakDays()}</b><small>連續天數</small></div><div class="metric"><b>${answeredUnique()}</b><small>已看過題目</small></div><div class="metric"><b>${oc.rate}%</b><small>實際作答正確率</small></div></div>
-    </div>
-    ${!ready?`<div class="banner"><b>先完成完整題庫</b><br><span class="small-text">專業 ${b.professional}/647、共同 ${b.common}/400。手機第一次使用也要把共同科目同步一次。</span><div style="margin-top:10px"><button id="openSync" class="primary small">同步題庫</button></div></div>`:''}
-    <div class="section-title"><h2>今天作業</h2><span class="pill">每天自動排課</span></div>
-    <div class="card">
-      <div class="task"><div><b>專業新題</b><span class="muted small-text">今日已完成 ${plan.proDone}/${plan.proTarget}</span></div><span class="pill ${plan.proRemaining?'':'good'}">剩 ${plan.proRemaining} 題</span></div>
-      <div class="task"><div><b>共同科目</b><span class="muted small-text">今日已完成 ${plan.commonDone}/${plan.commonTarget}</span></div><span class="pill ${plan.commonRemaining?'':'good'}">剩 ${plan.commonRemaining} 題</span></div>
-      <div class="task"><div><b>今日檢討</b><span class="muted small-text">答錯 ${review.wrong}／猜對 ${review.guessed}／不知道 ${review.unknown}</span></div><span class="pill ${review.total?'bad':'good'}">${review.total} 題</span></div>
-      <div class="task"><div><b>到期複習</b><span class="muted small-text">以前學過、今天輪到再考</span></div><span class="pill ${plan.dueCount?'warn':'good'}">${plan.dueCount} 題</span></div>
-      <button id="startDaily" class="primary wide" style="margin-top:14px" ${!ready||(!dailyRemaining&&!review.total)?'disabled':''}>${startLabel}</button>
-    </div>
-    <div class="grid2">
-      <div class="card"><h3>647 題進度</h3><p class="muted small-text">專業題已看過 ${state.questions.filter(q=>q.kind==='professional'&&exposureCount(getProgress(q.id))>0).length} / ${b.professional||647}</p><div class="progress"><i style="width:${pct(state.questions.filter(q=>q.kind==='professional'&&exposureCount(getProgress(q.id))>0).length,b.professional||647)}%"></i></div></div>
-      <div class="card"><h3>老師提醒</h3><p class="muted small-text">${weak?`目前作答最需要加強：<b>${esc(weak.name)}</b>（${weak.rate}%）`:'你現在是從題目開始學，第一次不會很正常；重點是看完講解後，隔天能不能答回來。'}</p></div>
-    </div>
-    <div class="section-title"><h2>快速入口</h2></div>
-    <div class="grid2"><button id="goReview" class="secondary">今日檢討 (${review.total})</button><button id="goHistory" class="ghost">歷屆試題</button></div>
-    <div class="section-title"><h2>題庫狀態</h2><button id="settingsBtn" class="ghost small">設定</button></div>
-    <div class="card"><div class="task"><div><b>專業 13900</b><span class="muted small-text">6 個工作項目</span></div><span class="pill ${b.professional>=647?'good':'warn'}">${b.professional}/647</span></div>${SOURCES.common.map(s=>`<div class="task"><div><b>${s.label}</b><span class="muted small-text">${s.code} · ${s.version}</span></div><span class="pill ${(b.byCommon[s.code]||0)>=90?'good':'warn'}">${b.byCommon[s.code]||0}/${s.expected}</span></div>`).join('')}</div>`;
-  v.querySelector('#openSync')?.addEventListener('click',()=>openSyncDialog());
-  v.querySelector('#startDaily')?.addEventListener('click',()=>{const qs=buildDailySession();if(qs.length)startQuiz(qs,'daily','今天作業');else startQuiz(todaysReviewQuestions(),'review','今日檢討');});
-  v.querySelector('#goReview').addEventListener('click',()=>navigate('review'));
-  v.querySelector('#goHistory').addEventListener('click',()=>renderHistory(true));
-  v.querySelector('#settingsBtn').addEventListener('click',()=>renderSettings(true));
+    <div class="hero"><div class="eyebrow" style="color:#ded9ff">TODAY</div><h2>今天要刷哪一套？</h2><p>美容丙級和寵物急救完全分開；答錯或按「不知道」的題目會留下來給你複習。</p><div class="metrics"><div class="metric"><b>${streakDays()}</b><small>連續天數</small></div><div class="metric"><b>${answeredUnique()}</b><small>已做過題目</small></div><div class="metric"><b>${oc.rate}%</b><small>作答正確率</small></div></div></div>
+    ${!b.readyProfessional||!b.readyFirstAid?`<div class="banner"><b>題庫正在修復。</b><br><span class="small-text">美容 ${b.professional}+排除 ${b.excludedProfessional}/647；急救 ${b.firstaid}+排除 ${b.excludedFirstAid}/80。</span></div>`:''}
+    <div class="section-title"><h2>兩份每日作業</h2><span class="pill">互不混題</span></div>
+    <div class="card"><div class="task"><div><b>寵物美容丙級</b><span class="muted small-text">今日 ${pro.done}/${pro.target} · 第 ${pro.cycle.cycle} 輪 · 本輪剩 ${pro.cycle.remaining}/${pro.cycle.total}</span></div><span class="pill ${proWrong?'bad':'good'}">待複習 ${proWrong}</span></div><div class="progress"><i style="width:${pct(pro.cycle.seen,pro.cycle.total)}%"></i></div><p class="muted small-text">原始 647 題；已永久排除 ${b.excludedProfessional} 題。整輪尚未刷完前，不會重複出已做過的題目。</p><button id="startProDaily" class="primary wide" ${!b.readyProfessional||pro.done>=pro.target?'disabled':''}>${pro.done>=pro.target?'今天已完成':'開始／繼續美容作業'}</button></div>
+    <div class="card"><div class="task"><div><b>寵物急救</b><span class="muted small-text">今日 ${fa.done}/${fa.target} · 第 ${fa.cycle.cycle} 輪 · 本輪剩 ${fa.cycle.remaining}/${fa.cycle.total}</span></div><span class="pill ${faWrong?'bad':'good'}">待複習 ${faWrong}</span></div><div class="progress"><i style="width:${pct(fa.cycle.seen,fa.cycle.total)}%"></i></div><p class="muted small-text">80 題自建學科練習題，與美容丙級完全分開，不會混進 647 題。</p><button id="startFaDaily" class="secondary wide" ${!b.readyFirstAid||fa.done>=fa.target?'disabled':''}>${fa.done>=fa.target?'今天已完成':'開始／繼續急救作業'}</button></div>
+    <div class="grid2"><div class="card"><h3>今天美容</h3><p class="muted small-text">答對 ${proToday.correct} · 答錯 ${proToday.wrong} · 不知道 ${proToday.unknown}</p></div><div class="card"><h3>今天急救</h3><p class="muted small-text">答對 ${faToday.correct} · 答錯 ${faToday.wrong} · 不知道 ${faToday.unknown}</p></div></div>
+    <div class="section-title"><h2>快速入口</h2></div><div class="grid2"><button id="goReview" class="secondary">錯題複習 (${proWrong+faWrong})</button><button id="goHistory" class="ghost">歷屆試題</button></div>
+    <div class="section-title"><h2>題庫狀態</h2><button id="settingsBtn" class="ghost small">設定</button></div><div class="card"><div class="task"><div><b>13900 專業</b><span class="muted small-text">有效 ${b.professional} · 排除 ${b.excludedProfessional}</span></div><span class="pill ${b.readyProfessional?'good':'warn'}">647</span></div><div class="task"><div><b>寵物急救</b><span class="muted small-text">自建練習題 · 非官方考古題</span></div><span class="pill ${b.readyFirstAid?'good':'warn'}">${b.firstaid}/80</span></div><div class="task"><div><b>共同科目</b><span class="muted small-text">只供自由刷題與丙級模考，不混入美容每日 647 題</span></div><span class="pill ${b.readyCommon?'good':'warn'}">${b.common}/400</span></div></div>`;
+  v.querySelector('#startProDaily')?.addEventListener('click',()=>startDailyKind('professional'));v.querySelector('#startFaDaily')?.addEventListener('click',()=>startDailyKind('firstaid'));v.querySelector('#goReview').onclick=()=>navigate('review');v.querySelector('#goHistory').onclick=()=>renderHistory(true);v.querySelector('#settingsBtn').onclick=()=>renderSettings(true);
 }
 
 function renderStudy(){
-  const v=document.querySelector('#view-study');const b=bankInfo();
-  v.innerHTML=`<div class="section-title"><h2>自由刷題</h2><span class="pill">${b.professional+b.common} 題已載入</span></div>
-  <div class="card"><h3>專業科目</h3><p class="muted small-text">可以只刷某個工作項目；系統仍會記錄錯題與熟練度。</p><div class="stack">${SOURCES.professional.sections.map(([code,name,count])=>{const qs=state.questions.filter(q=>q.kind==='professional'&&q.section===code);const seen=qs.filter(q=>getProgress(q.id).attempts).length;return `<button class="categoryBtn ghost" data-kind="professional" data-code="${code}"><b>${code} ${esc(name)}</b><br><span class="small-text muted">${seen}/${qs.length||count} 已做</span></button>`}).join('')}</div></div>
-  <div class="card"><h3>共同科目</h3><div class="stack">${SOURCES.common.map(s=>{const qs=state.questions.filter(q=>q.subjectCode===s.code);return `<button class="categoryBtn ghost" data-kind="common" data-code="${s.code}">${esc(s.label)} <span class="small-text muted">${qs.length} 題</span></button>`}).join('')}</div></div>
-  <div class="card"><h3>特殊練習</h3><div class="grid2"><button id="unseenBtn" class="secondary">只做沒看過的</button><button id="randomBtn" class="secondary">隨機 30 題</button><button id="starBtn" class="ghost">收藏題</button><button id="searchBtn" class="ghost">搜尋題目</button></div><div id="searchBox" style="display:none;margin-top:12px"><input id="searchInput" placeholder="輸入犬種、疾病、法規…" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:12px"><div id="searchResults"></div></div></div>`;
-  v.querySelectorAll('.categoryBtn').forEach(btn=>btn.addEventListener('click',()=>{const kind=btn.dataset.kind,code=btn.dataset.code;const pool=kind==='professional'?state.questions.filter(q=>q.kind==='professional'&&q.section===code):state.questions.filter(q=>q.subjectCode===code);startQuiz(sample(pool,30),'practice',btn.textContent.trim());}));
-  v.querySelector('#unseenBtn').onclick=()=>startQuiz(sample(unseen(),30),'practice','未作答練習');
-  v.querySelector('#randomBtn').onclick=()=>startQuiz(sample(state.questions,30),'practice','隨機 30 題');
-  v.querySelector('#starBtn').onclick=()=>startQuiz(state.questions.filter(q=>getProgress(q.id).starred),'practice','收藏題');
-  v.querySelector('#searchBtn').onclick=()=>{const box=v.querySelector('#searchBox');box.style.display=box.style.display==='none'?'block':'none';};
-  v.querySelector('#searchInput').oninput=(e)=>{const s=e.target.value.trim().toLowerCase();const r=v.querySelector('#searchResults');if(s.length<2){r.innerHTML='';return;}const hits=state.questions.filter(q=>(q.prompt+' '+q.options.join(' ')).toLowerCase().includes(s)).slice(0,30);r.innerHTML=hits.map(q=>`<button class="searchHit ghost wide" data-id="${q.id}" style="margin-top:8px;text-align:left">${esc(q.prompt.slice(0,70))}</button>`).join('');r.querySelectorAll('.searchHit').forEach(b=>b.onclick=()=>startQuiz([state.questions.find(q=>q.id===b.dataset.id)],'practice','搜尋結果'));};
+  const v=document.querySelector('#view-study'),b=bankInfo();
+  v.innerHTML=`<div class="section-title"><h2>自由刷題</h2><span class="pill">選哪套就只出哪套</span></div>
+  <div class="card"><h3>寵物美容丙級</h3><p class="muted small-text">文字選項會隨機換位置，避免背 A/B/C/D。</p><div class="stack">${SOURCES.professional.sections.map(([code,name,count])=>{const qs=state.questions.filter(q=>q.kind==='professional'&&q.section===code);return `<button class="categoryBtn ghost" data-kind="professional" data-code="${code}"><b>${code} ${esc(name)}</b><br><span class="small-text muted">${qs.length}/${count} 題</span></button>`}).join('')}</div><button id="proRandom" class="secondary wide" style="margin-top:12px">美容隨機 30 題</button></div>
+  <div class="card"><h3>寵物急救</h3><p class="muted small-text">自建練習題，不與美容題混合。</p><div class="stack">${[...new Map(state.questions.filter(q=>q.kind==='firstaid').map(q=>[q.section,q.sectionName])).entries()].map(([code,name])=>`<button class="categoryBtn ghost" data-kind="firstaid" data-code="${code}">${esc(name)} <span class="small-text muted">${state.questions.filter(q=>q.kind==='firstaid'&&q.section===code).length} 題</span></button>`).join('')}</div><button id="faRandom" class="secondary wide" style="margin-top:12px">急救隨機 20 題</button></div>
+  <div class="card"><h3>共同科目</h3><div class="stack">${SOURCES.common.map(s=>`<button class="categoryBtn ghost" data-kind="common" data-code="${s.code}">${esc(s.label)} <span class="small-text muted">${state.questions.filter(q=>q.subjectCode===s.code).length} 題</span></button>`).join('')}</div></div>
+  <div class="card"><h3>其他</h3><div class="grid2"><button id="starBtn" class="ghost">收藏題</button><button id="searchBtn" class="ghost">搜尋題目</button></div><div id="searchBox" style="display:none;margin-top:12px"><input id="searchInput" placeholder="輸入題目關鍵字…" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:12px"><div id="searchResults"></div></div></div>`;
+  v.querySelectorAll('.categoryBtn').forEach(btn=>btn.addEventListener('click',()=>{const kind=btn.dataset.kind,code=btn.dataset.code;let pool=[];if(kind==='professional')pool=state.questions.filter(q=>q.kind==='professional'&&q.section===code);else if(kind==='firstaid')pool=state.questions.filter(q=>q.kind==='firstaid'&&q.section===code);else pool=state.questions.filter(q=>q.subjectCode===code);startQuiz(sample(pool,30),'practice',btn.textContent.trim());}));
+  v.querySelector('#proRandom').onclick=()=>startQuiz(sample(poolForKind('professional'),30),'practice','美容隨機 30 題');v.querySelector('#faRandom').onclick=()=>startQuiz(sample(poolForKind('firstaid'),20),'practice','急救隨機 20 題');v.querySelector('#starBtn').onclick=()=>startQuiz(state.questions.filter(q=>getProgress(q.id).starred),'practice','收藏題');
+  v.querySelector('#searchBtn').onclick=()=>{const box=v.querySelector('#searchBox');box.style.display=box.style.display==='none'?'block':'none';};v.querySelector('#searchInput').oninput=e=>{const x=e.target.value.trim().toLowerCase(),r=v.querySelector('#searchResults');if(x.length<2){r.innerHTML='';return;}const hits=state.questions.filter(q=>(q.prompt+' '+q.options.join(' ')).toLowerCase().includes(x)).slice(0,30);r.innerHTML=hits.map(q=>`<button class="searchHit ghost wide" data-id="${q.id}" style="margin-top:8px;text-align:left">${esc(q.prompt.slice(0,70))}</button>`).join('');r.querySelectorAll('.searchHit').forEach(btn=>btn.onclick=()=>startQuiz([state.questions.find(q=>q.id===btn.dataset.id)],'practice','搜尋結果'));};
 }
 
 function renderReview(){
-  const v=document.querySelector('#view-review'),todayReview=todaysReviewQuestions(),todayInfo=todaysReviewSummary(),due=dueQuestions(),wrong=wrongQuestions(),help=state.questions.filter(q=>getProgress(q.id).needsHelp);
-  v.innerHTML=`<div class="section-title"><h2>檢討與複習</h2><span class="pill bad">今日 ${todayInfo.total} 題</span></div>
-  <div class="card"><h3>今天一定要再看</h3><p class="muted">答錯 ${todayInfo.wrong} 題、猜對 ${todayInfo.guessed} 題、完全不知道 ${todayInfo.unknown} 題。只要你後面再「確定答對」一次，就會從今日檢討移除。</p><button id="todayReview" class="primary wide" ${!todayReview.length?'disabled':''}>開始今日檢討 (${todayReview.length})</button></div>
-  <div class="card"><h3>老師待講題</h3><p class="muted">如果 App 裡的講解你看完還是不懂，就標記起來。之後可以只刷這些題，也方便我們逐題補成更完整的講解。</p><button id="helpReview" class="secondary wide" ${!help.length?'disabled':''}>複習還不懂的題 (${help.length})</button></div>
-  <div class="card"><h3>到期複習</h3><p class="muted">這是以前學過、按照間隔複習排到今天的題目，和「今天剛錯」是兩回事。</p><button id="dueReview" class="secondary wide" ${!due.length?'disabled':''}>複習到期題 (${due.length})</button></div>
-  <div class="card"><h3>重點錯題</h3>${wrong.length?wrong.slice(0,12).map(q=>{const p=getProgress(q.id);return `<div class="task"><div><b>${esc(q.prompt.slice(0,54))}${q.prompt.length>54?'…':''}</b><span class="muted small-text">錯 ${p.wrong||0} 次 · ${esc(q.sectionName)}</span></div><span class="pill bad">Lv.${p.level||0}</span></div>`}).join(''):'<div class="empty">還沒有累積錯題</div>'}<button id="allWrong" class="ghost wide" ${!wrong.length?'disabled':''}>只刷所有錯題</button></div>`;
-  v.querySelector('#todayReview').onclick=()=>startQuiz(todayReview,'review','今日檢討');
-  v.querySelector('#helpReview').onclick=()=>startQuiz(help,'review','老師待講題');
-  v.querySelector('#dueReview').onclick=()=>startQuiz(due,'review','到期複習');
-  v.querySelector('#allWrong').onclick=()=>startQuiz(sample(wrong,50),'review','錯題加強');
+  const v=document.querySelector('#view-review'),pro=pendingReview('professional'),fa=pendingReview('firstaid'),common=pendingReview('common'),ever=wrongEver();
+  const block=(title,arr,id)=>`<div class="card"><div class="task"><div><b>${title}</b><span class="muted small-text">最近一次仍答錯或按「不知道」</span></div><span class="pill ${arr.length?'bad':'good'}">${arr.length} 題</span></div><button id="${id}" class="${arr.length?'secondary':'ghost'} wide" ${!arr.length?'disabled':''}>開始複習</button></div>`;
+  v.innerHTML=`<div class="section-title"><h2>錯題複習</h2><span class="pill bad">待複習 ${pro.length+fa.length+common.length}</span></div>${block('寵物美容丙級',pro,'reviewPro')}${block('寵物急救',fa,'reviewFa')}${block('共同科目',common,'reviewCommon')}<div class="card"><h3>錯題紀錄</h3><p class="muted small-text">曾經答錯或按「不知道」就會保留在紀錄裡；之後答對會離開「待複習」，但歷史不會消失。</p>${ever.length?ever.slice(0,14).map(q=>{const p=getProgress(q.id);return `<div class="task"><div><b>${esc(q.prompt.slice(0,52))}${q.prompt.length>52?'…':''}</b><span class="muted small-text">${esc(q.sectionName)} · 錯 ${p.wrong||0} · 不知道 ${p.unknown||0}</span></div></div>`}).join(''):'<div class="empty">目前沒有錯題</div>'}</div>`;
+  v.querySelector('#reviewPro').onclick=()=>startQuiz(pro,'review','美容待複習');v.querySelector('#reviewFa').onclick=()=>startQuiz(fa,'review','急救待複習');v.querySelector('#reviewCommon').onclick=()=>startQuiz(common,'review','共同科目待複習');
 }
 
 function renderExam(){
@@ -379,297 +360,88 @@ function renderHistory(navigateNow=false){
   v.querySelector('#backHome').onclick=()=>navigate('home');
 }
 
+
 function renderStats(){
-  const v=document.querySelector('#view-stats'),o=overallCorrect(),todayS=todaysSummary(),cats=categoryStats(),b=bankInfo(),help=state.questions.filter(q=>getProgress(q.id).needsHelp).length;
-  v.innerHTML=`<div class="section-title"><h2>學習報告</h2><span class="pill">老師模式</span></div><div class="grid3"><div class="card"><h3>${answeredUnique()}</h3><span class="muted small-text">已看過題目</span></div><div class="card"><h3>${o.rate}%</h3><span class="muted small-text">實際作答正確率</span></div><div class="card"><h3>${todaysReviewQuestions().length}</h3><span class="muted small-text">今日待檢討</span></div></div><div class="card"><h3>各科弱點</h3>${cats.map(c=>`<div class="stat-row"><span>${esc(c.name)}</span><div class="progress"><i style="width:${c.attempts?c.rate:0}%"></i></div><b>${c.attempts?c.rate+'%':'—'}</b></div>`).join('')}</div><div class="card"><h3>題庫覆蓋率</h3><div class="task"><div><b>專業題</b><span class="muted small-text">看過至少 1 次</span></div><span>${state.questions.filter(q=>q.kind==='professional'&&exposureCount(getProgress(q.id))>0).length}/${b.professional}</span></div><div class="task"><div><b>共同題</b><span class="muted small-text">看過至少 1 次</span></div><span>${state.questions.filter(q=>q.kind==='common'&&exposureCount(getProgress(q.id))>0).length}/${b.common}</span></div><div class="task"><div><b>老師待講題</b><span class="muted small-text">講解看完仍不懂</span></div><span>${help}</span></div></div><div class="card"><h3>今天</h3><p class="muted">碰過 ${todayS.count} 題次 · 答對 ${todayS.correct} · 答錯 ${todayS.wrong}${todayS.unknown?` · 不知道 ${todayS.unknown}`:''}${todayS.guessed?` · 猜對 ${todayS.guessed}`:''} · 作答正確率 ${todayS.rate}%</p></div>`;
+  const v=document.querySelector('#view-stats'),b=bankInfo(),pro=overallCorrect('professional'),fa=overallCorrect('firstaid'),proPending=pendingReview('professional').length,faPending=pendingReview('firstaid').length;
+  const rows=(kind)=>categoryStats(kind).map(c=>`<div class="stat-row"><span>${esc(c.name)}</span><div class="progress"><i style="width:${c.attempts?c.rate:0}%"></i></div><b>${c.attempts?c.rate+'%':'—'}</b></div>`).join('');
+  v.innerHTML=`<div class="section-title"><h2>學習紀錄</h2><span class="pill">錯題優先</span></div><div class="grid2"><div class="card"><h3>美容 ${pro.rate}%</h3><span class="muted small-text">已做 ${answeredUnique('professional')}/${b.professional} · 待複習 ${proPending}</span></div><div class="card"><h3>急救 ${fa.rate}%</h3><span class="muted small-text">已做 ${answeredUnique('firstaid')}/${b.firstaid} · 待複習 ${faPending}</span></div></div><div class="card"><h3>美容各項目</h3>${rows('professional')}</div><div class="card"><h3>急救各主題</h3>${rows('firstaid')}</div><div class="card"><h3>永久排除</h3><p class="muted small-text">美容 ${b.excludedProfessional} 題 · 急救 ${b.excludedFirstAid} 題。排除後不會再被題庫更新補回每日作業。</p></div>`;
 }
 
 function renderSettings(navigateNow=false){
   if(navigateNow){state.view='settings';document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.querySelector('#view-settings').classList.add('active');document.querySelectorAll('.bottom-nav button').forEach(x=>x.classList.remove('active'));}
-  const last=getMeta('lastAutoBackupAt',null),persist=getMeta('storagePersistent',false);
-  const lastText=last?new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(last)):'尚未建立';
-  const v=document.querySelector('#view-settings');v.innerHTML=`<div class="section-title"><h2>設定</h2><span class="pill">${APP_VERSION}</span></div><div class="card"><div class="setting-row"><div><b>每日專業新題</b><div class="muted small-text">預設 50 題；中途離開會從剩餘題數接著算</div></div><input id="dailyPro" type="number" min="5" max="100" value="${getMeta('dailyProfessional',50)}"></div><div class="setting-row"><div><b>每日共同科目</b><div class="muted small-text">預設 10 題</div></div><input id="dailyCom" type="number" min="0" max="40" value="${getMeta('dailyCommon',10)}"></div></div><div class="card"><h3>目前採用：初學模式</h3><p class="muted small-text">第一次看到的題目，即使靠常識答對，隔天仍會再確認一次；答錯、猜對、或按「完全不知道」都會進今日檢討。一般刷題會打亂文字選項，避免只背 A/B/C/D。</p></div><div class="card"><h3>自動保存與備份</h3><p><b>✓ 每一題作答後自動保存</b></p><p class="muted small-text">錯題、猜題、不知道、熟練度、收藏、老師待講題與成績都會立即寫進本機；另保留最近 7 天的自動快照。</p><div class="sync-line"><span>最近自動快照</span><b>${esc(lastText)}</b></div><div class="sync-line"><span>瀏覽器永久儲存</span><b>${persist?'已啟用':'未確認'}</b></div><p class="muted small-text">正常關閉 App、重新開機或離線都不會掉紀錄。只有你主動「清除網站資料／瀏覽器資料」時，本機資料仍可能被刪除；下方手動匯出可作異機救援備份。</p></div><div class="card"><h3>題庫</h3><button id="syncSettings" class="primary wide">同步／更新題庫</button></div><div class="card"><h3>救援備份</h3><p class="muted small-text">平常不用按。只有要清瀏覽器、換手機或想多留一份檔案時再匯出 JSON。</p><div class="grid2"><button id="exportBtn" class="secondary">匯出一份備份</button><button id="importBackupBtn" class="ghost">匯入備份</button></div><input id="backupFile" type="file" accept="application/json" hidden></div><div class="card"><h3>危險區</h3><button id="resetBtn" class="danger wide">清除所有學習紀錄</button></div><button id="settingsHome" class="ghost wide">回今日首頁</button>`;
-  v.querySelector('#dailyPro').onchange=async e=>{await setMeta('dailyProfessional',clamp(Number(e.target.value)||50,5,100));queueAutoSnapshot('設定更新');};v.querySelector('#dailyCom').onchange=async e=>{await setMeta('dailyCommon',clamp(Number(e.target.value)||10,0,40));queueAutoSnapshot('設定更新');};v.querySelector('#syncSettings').onclick=openSyncDialog;v.querySelector('#settingsHome').onclick=()=>navigate('home');v.querySelector('#exportBtn').onclick=exportBackup;v.querySelector('#importBackupBtn').onclick=()=>v.querySelector('#backupFile').click();v.querySelector('#backupFile').onchange=importBackup;v.querySelector('#resetBtn').onclick=()=>confirmAction('清除所有學習紀錄？','錯題、作答紀錄、熟練度與模考成績都會歸零，但題庫會保留。',async()=>{await clearStore(STORE_P);state.progress.clear();await setMeta('mockResults',[]);await writeAutoSnapshot('清除後快照');toast('學習紀錄已清除');renderSettings();});
+  const last=getMeta('lastAutoBackupAt',null),persist=getMeta('storagePersistent',false),ex=(getMeta('excludedQuestionIds',[])||[]),customEx=customExcludedIds();const lastText=last?new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(last)):'尚未建立';
+  const v=document.querySelector('#view-settings');v.innerHTML=`<div class="section-title"><h2>設定</h2><span class="pill">${APP_VERSION}</span></div><div class="card"><div class="setting-row"><div><b>每日美容題數</b><div class="muted small-text">從本輪尚未出現的題目依隨機牌組往下刷</div></div><input id="dailyPro" type="number" min="5" max="100" value="${getMeta('dailyProfessional',50)}"></div><div class="setting-row"><div><b>每日急救題數</b><div class="muted small-text">與美容作業完全分開</div></div><input id="dailyFa" type="number" min="5" max="80" value="${getMeta('dailyFirstAid',20)}"></div></div><div class="card"><h3>刷題規則</h3><p class="muted small-text">美容原始 647 題會先扣除固定不考題，再把有效題目整輪刷完才開始重複；被永久排除的不考題不會再出現。文字選項會隨機換位置，避免只背 A/B/C/D。系統主要保留答錯與「不知道」的紀錄，供後續複習。</p></div><div class="card"><h3>永久排除題目</h3><p class="muted small-text">固定不考 ${DEFAULT_EXCLUDED_IDS.length} 題（13900-06：11、12、14、15、18–23、25–42）；另外自行排除 ${customEx.length} 題。題庫同步、App 更新與清除學習紀錄都不會把固定不考題加回來。</p><button id="restoreExcluded" class="ghost wide" ${!customEx.length?'disabled':''}>恢復自行排除題 (${customEx.length})</button></div><div class="card"><h3>自動保存與備份</h3><p><b>✓ 每一題作答後自動保存</b></p><div class="sync-line"><span>最近自動快照</span><b>${esc(lastText)}</b></div><div class="sync-line"><span>瀏覽器永久儲存</span><b>${persist?'已啟用':'未確認'}</b></div><div class="grid2" style="margin-top:12px"><button id="exportBtn" class="secondary">匯出備份</button><button id="importBackupBtn" class="ghost">匯入備份</button></div><input id="backupFile" type="file" accept="application/json" hidden></div><div class="card"><h3>題庫</h3><button id="syncSettings" class="primary wide">同步／更新題庫</button></div><div class="card"><h3>危險區</h3><button id="resetBtn" class="danger wide">清除學習紀錄（保留排除題）</button></div><button id="settingsHome" class="ghost wide">回今日首頁</button>`;
+  v.querySelector('#dailyPro').onchange=async e=>{await setMeta('dailyProfessional',clamp(Number(e.target.value)||50,5,100));queueAutoSnapshot('設定更新');};v.querySelector('#dailyFa').onchange=async e=>{await setMeta('dailyFirstAid',clamp(Number(e.target.value)||20,5,80));queueAutoSnapshot('設定更新');};v.querySelector('#syncSettings').onclick=openSyncDialog;v.querySelector('#settingsHome').onclick=()=>navigate('home');v.querySelector('#exportBtn').onclick=exportBackup;v.querySelector('#importBackupBtn').onclick=()=>v.querySelector('#backupFile').click();v.querySelector('#backupFile').onchange=importBackup;
+  v.querySelector('#restoreExcluded').onclick=()=>confirmAction('恢復自行排除題？','只會恢復你之後手動排除的題目；已確認不考的固定 28 題仍維持排除。',async()=>{await setMeta('excludedQuestionIds',[...DEFAULT_EXCLUDED_IDS]);await reloadQuestions();await ensureCycle('professional');await ensureCycle('firstaid');toast('已恢復自行排除題');renderSettings();});
+  v.querySelector('#resetBtn').onclick=()=>confirmAction('清除學習紀錄？','作答、錯題與成績會歸零；永久排除清單會保留。',async()=>{await clearStore(STORE_P);state.progress.clear();await setMeta('mockResults',[]);await setMeta(cycleKey('professional'),null);await setMeta(cycleKey('firstaid'),null);await ensureCycle('professional');await ensureCycle('firstaid');await writeAutoSnapshot('清除後快照');toast('學習紀錄已清除');renderSettings();});
 }
 
 function navigate(view){state.view=view;document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${view}`));document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));if(view==='home')renderHome();if(view==='study')renderStudy();if(view==='review')renderReview();if(view==='exam')renderExam();if(view==='stats')renderStats();window.scrollTo(0,0);}
 
-const CURATED_TEACHER_NOTES={
-  '13900-06-050':{
-    lessonType:'理解題',
-    detailLevel:'完整解析',
-    concept:'美容前溝通要處理「會影響這次美容安全、造型與照護」的資訊。',
-    why:'犬隻的胖瘦、毛髮狀況與牙齒狀況，都可能影響美容時的操作或需要提醒飼主；血統本身不會改變這一次要怎麼洗、吹、剪或做安全評估，所以「犬隻的血統問題」是不恰當的重點。',
-    memory:'美容前先想「體況、毛髮、健康」；血統不是當次美容操作重點。',
-    choiceNotes:{
-      '犬隻的胖瘦':'犬隻的胖瘦：要看。過胖、過瘦或年老都可能影響站立、耐受度與美容安全。',
-      '毛髮的保養':'毛髮的保養：要看。毛況、打結與皮膚狀況直接影響洗護與修剪。',
-      '牙齒的保健':'牙齒的保健：可以觀察並提醒飼主，屬於健康照護資訊。',
-      '犬隻的血統問題':'犬隻的血統問題：不是這次美容操作必須處理的重點，所以是答案。'
-    }
-  },
-  '13900-04-032':{
-    lessonType:'記憶＋理解題',
-    detailLevel:'完整解析',
-    concept:'幼貓早期接觸人、環境與同伴的經驗，會影響後續的社會行為。',
-    why:'題庫把貓咪的「社會化時期」定在 30～60 天，也就是約 1～2 個月大。這是很早期的成長階段，因此 7～9 個月或 12 個月以上都太晚；0～14 天則仍屬非常早的初生階段。',
-    memory:'貓社會化＝約 1～2 個月＝30～60 天。',
-    choiceNotes:{
-      '0 天～14 天':'0～14 天：太早，仍是非常早期的初生階段。',
-      '30 天～60 天':'30～60 天：題庫指定的社會化時期，約 1～2 個月。',
-      '7 個月～9 個月':'7～9 個月：已遠超過題庫所指的早期社會化階段。',
-      '12 個月以上':'12 個月以上：更不是幼貓早期社會化階段。'
-    }
-  },
-  '13900-03-092':{
-    lessonType:'理解題',
-    detailLevel:'完整解析',
-    concept:'辨認犬隻「呼吸系統」與其他器官系統。',
-    why:'咽喉、氣管、肺臟都和空氣進出及氣體交換有關，屬於呼吸系統；脾臟不是呼吸器官，主要與免疫及血液相關，所以「脾臟」是這題要找的例外。',
-    memory:'呼吸路線抓「咽喉 → 氣管 → 肺」；脾臟不在空氣路線上。',
-    choiceNotes:{
-      '脾臟':'脾臟：不是呼吸系統，主要和免疫、血液功能相關，所以是答案。',
-      '咽喉':'咽喉：空氣進入呼吸道會經過的部位，屬呼吸系統相關構造。',
-      '氣管':'氣管：把空氣送往肺部，屬呼吸系統。',
-      '肺臟':'肺臟：進行氣體交換的主要器官，屬呼吸系統。'
-    }
-  },
-  '13900-03-093':{
-    lessonType:'理解題',
-    detailLevel:'完整解析',
-    concept:'辨認犬隻「消化系統」與「泌尿系統」。',
-    why:'胃、小腸、大腸都在食物的消化與吸收路徑上，屬於消化系統；腎臟的主要工作是過濾血液、形成尿液，屬於泌尿系統，因此「腎臟」不是犬隻的消化系統。',
-    memory:'食物路線：胃 → 小腸 → 大腸；腎臟走的是「尿液路線」，不在食物路線上。',
-    choiceNotes:{
-      '胃':'胃：消化系統。負責儲存、攪拌食物並進行初步消化。',
-      '小腸':'小腸：消化系統。是主要消化與吸收營養的部位。',
-      '大腸':'大腸：消化系統。主要吸收水分並形成糞便。',
-      '腎臟':'腎臟：泌尿系統。過濾血液並形成尿液，所以是本題答案。'
-    }
-  }
-};
-
-
-const VISUAL_BREEDS={
-  '古代英國牧羊犬':{label:'古代英國牧羊犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Old_English_Sheep_Dog.JPG?width=900',note:'頭部被毛豐厚，典型外觀會讓長毛自然覆蓋眼睛。'},
-  '古代牧羊犬':{label:'古代英國牧羊犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Old_English_Sheep_Dog.JPG?width=900',note:'頭部被毛豐厚，典型外觀會讓長毛自然覆蓋眼睛。'},
-  '雪納瑞犬':{label:'雪納瑞',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Schnauzer_mini.jpg?width=900',note:'辨識重點：濃眉、鬍鬚、硬質被毛與修短軀幹。'},
-  '雪納瑞':{label:'雪納瑞',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Schnauzer_mini.jpg?width=900',note:'辨識重點：濃眉、鬍鬚、硬質被毛與修短軀幹。'},
-  '約克夏犬':{label:'約克夏犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Yorkshire_Terrier_dog.jpg?width=800',note:'辨識重點：長而絲滑的藍鋼色與黃褐色被毛。'},
-  '德國狼犬':{label:'德國狼犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/German_Shepherd_Dog_standing.jpg?width=900',note:'側面最容易看出胸深、後軀與飛節角度。'},
-  '狼犬':{label:'德國狼犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/German_Shepherd_Dog_standing.jpg?width=900',note:'側面最容易看出胸深、後軀與飛節角度。'},
-  '北京犬':{label:'北京犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Pekingese-dog.jpg?width=800',note:'辨識重點：扁臉、大眼、濃密長毛。'},
-  '北京狗':{label:'北京犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Pekingese-dog.jpg?width=800',note:'辨識重點：扁臉、大眼、濃密長毛。'},
-  '西施犬':{label:'西施犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Shih_tzu_dog.jpg?width=800',note:'辨識重點：短口吻、長毛、垂耳。'},
-  '鬆獅犬':{label:'鬆獅犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Chow_Chow_dog.jpg?width=800',note:'辨識重點：厚重雙層毛、方正體型、藍黑舌。'},
-  '比熊犬':{label:'比熊犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Bichon_frise.JPG?width=900',note:'辨識重點：白色蓬鬆捲毛與圓形頭部輪廓。'},
-  '瑪爾濟斯犬':{label:'瑪爾濟斯犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Maltese_dog.jpg?width=900',note:'辨識重點：純白、長直、絲狀單層被毛。'},
-  '臘腸犬':{label:'臘腸犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Dachshund_Dog.jpg?width=800',note:'辨識重點：短腿、長身。'},
-  '蝴蝶犬':{label:'蝴蝶犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Papillon_dog.jpeg?width=800',note:'辨識重點：大型直立耳與耳緣長毛，像蝴蝶翅膀。'},
-  '貝林登犬':{label:'貝林登犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Bedlington_Terrier.jpg?width=900',note:'辨識重點：狹長頭型、拱背、羊羔般外觀。'},
-  '博美犬':{label:'博美犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Pomeranian_dog.jpg?width=900',note:'辨識重點：狐狸樣頭部、豐厚雙層毛、尾巴覆背。'},
-  '貴賓犬':{label:'貴賓犬',url:'https://commons.wikimedia.org/wiki/Special:FilePath/Standard_Poodle.JPG?width=800',note:'辨識重點：捲毛、長口吻、典型修剪造型。'}
-};
-const TOOL_VISUALS={
-  '排梳':{title:'排梳',svg:`<svg viewBox="0 0 320 150" role="img" aria-label="排梳示意圖"><rect x="38" y="56" width="244" height="18" rx="9" fill="#6f6b78"/><g stroke="#77727f" stroke-width="5">${Array.from({length:18},(_,i)=>`<line x1="${48+i*13}" y1="72" x2="${48+i*13}" y2="124"/>`).join('')}</g></svg>`,note:'金屬齒排成一直線，常用來檢查是否還有毛結、整理毛流。'},
-  '針梳':{title:'針梳',svg:`<svg viewBox="0 0 320 180" role="img" aria-label="針梳示意圖"><rect x="80" y="25" width="160" height="80" rx="18" fill="#d8d4df"/><rect x="143" y="103" width="34" height="65" rx="14" fill="#7d6d5f"/><g stroke="#77727f" stroke-width="3">${Array.from({length:9},(_,r)=>Array.from({length:12},(_,c)=>`<line x1="${94+c*12}" y1="${36+r*7}" x2="${90+c*12}" y2="${25+r*7}"/>`).join('')).join('')}</g></svg>`,note:'刷面有大量細金屬針，適合蓬鬆、梳開與整理被毛。'},
-  '木柄梳':{title:'木柄梳',svg:`<svg viewBox="0 0 320 170" role="img" aria-label="木柄梳示意圖"><rect x="45" y="70" width="230" height="32" rx="16" fill="#9a6b45"/><g stroke="#77727f" stroke-width="4">${Array.from({length:15},(_,i)=>`<line x1="${112+i*10}" y1="69" x2="${112+i*10}" y2="32"/>`).join('')}</g></svg>`,note:'有握柄、梳齒較集中，常用於局部整理與梳毛。'},
-  '刀梳':{title:'刀梳',svg:`<svg viewBox="0 0 320 170" role="img" aria-label="刀梳示意圖"><rect x="42" y="70" width="235" height="30" rx="14" fill="#6f6b78"/><g fill="#a7a2af">${Array.from({length:10},(_,i)=>`<path d="M${120+i*14} 70 l8 -34 l8 34z"/>`).join('')}</g></svg>`,note:'梳齒間帶切削作用，用來削薄或處理部分被毛；不是一般耳部梳理的首選。'}
-};
-function visualCandidates(q){
-  const text=`${q.prompt} ${q.options.join(' ')}`;const out=[];const seen=new Set();
-  for(const [k,v] of Object.entries(VISUAL_BREEDS)){if(text.includes(k)&&!seen.has(v.label)){seen.add(v.label);out.push({type:'breed',...v});}}
-  for(const [k,v] of Object.entries(TOOL_VISUALS)){if(text.includes(k)&&!seen.has(v.title)){seen.add(v.title);out.push({type:'tool',...v});}}
-  return out.slice(0,4);
-}
-function conceptDiagram(q){
-  const t=`${q.prompt} ${q.options.join(' ')}`;
-  if(/剪刀咬合|上齒過突|下齒過突|水平咬合/.test(t))return {title:'咬合位置圖',html:`<div class="bite-grid"><div><b>剪刀咬合</b><span>上門齒略覆下門齒</span><svg viewBox="0 0 150 90"><path d="M15 34 Q75 18 135 34" stroke="#725ee8" stroke-width="9" fill="none"/><path d="M15 50 Q75 35 135 50" stroke="#807b88" stroke-width="9" fill="none"/></svg></div><div><b>上齒過突</b><span>上顎明顯在前</span><svg viewBox="0 0 150 90"><path d="M10 32 Q75 18 140 32" stroke="#725ee8" stroke-width="9" fill="none"/><path d="M28 54 Q80 40 128 54" stroke="#807b88" stroke-width="9" fill="none"/></svg></div><div><b>下齒過突</b><span>下顎明顯在前</span><svg viewBox="0 0 150 90"><path d="M28 32 Q80 18 128 32" stroke="#725ee8" stroke-width="9" fill="none"/><path d="M10 54 Q75 40 140 54" stroke="#807b88" stroke-width="9" fill="none"/></svg></div></div>`,note:'不要只背英文，先看上下顎誰在前。'};
-  if(/飛節/.test(t))return {title:'飛節在哪裡？',html:`<svg class="body-diagram" viewBox="0 0 420 210" role="img" aria-label="犬隻側面飛節位置圖"><ellipse cx="205" cy="92" rx="105" ry="52" fill="#eceaf3"/><circle cx="83" cy="74" r="38" fill="#eceaf3"/><path d="M125 90 L110 174 M174 130 L160 185 M278 127 L312 166 L298 195 M250 127 L275 169 L266 195" stroke="#77727f" stroke-width="15" stroke-linecap="round" fill="none"/><circle cx="312" cy="166" r="10" fill="#6656e8"/><path d="M326 150 L375 116" stroke="#6656e8" stroke-width="4"/><text x="330" y="108" fill="#4b3fd0" font-size="18" font-weight="700">飛節</text></svg>`,note:'飛節是後肢下段明顯轉折的關節，從犬隻側面最好辨認。'};
-  if(/船底胸型|桶狀胸型|扁平胸型|胸型/.test(t))return {title:'胸型輪廓比較',html:`<div class="shape-grid"><div><b>桶狀</b><svg viewBox="0 0 120 90"><ellipse cx="60" cy="45" rx="38" ry="38" fill="#e7e4ef" stroke="#77727f" stroke-width="4"/></svg></div><div><b>船底</b><svg viewBox="0 0 120 90"><path d="M22 20 Q60 78 98 20 Q80 65 60 75 Q40 65 22 20Z" fill="#e7e4ef" stroke="#77727f" stroke-width="4"/></svg></div><div><b>扁平</b><svg viewBox="0 0 120 90"><ellipse cx="60" cy="45" rx="25" ry="40" fill="#e7e4ef" stroke="#77727f" stroke-width="4"/></svg></div></div>`,note:'先看胸廓橫切面的形狀，再把犬種配進去。'};
-  if(/剪刀拿的方向|剪刀拿.*方向|直毛犬修剪/.test(t))return {title:'剪刀方向示意',html:`<div class="direction-demo"><div><span class="ok-mark">✓</span><b>順著毛流</b><div class="hair-lines">↓↓↓↓↓</div><div class="scissor-line">✂ ↓</div></div><div><span class="no-mark">✕</span><b>橫向切過毛流</b><div class="hair-lines">↓↓↓↓↓</div><div class="scissor-line">✂ →</div></div></div>`,note:'直毛犬修剪時，橫向切毛容易留下明顯剪痕。'};
-  if(/瞬膜|第三眼瞼/.test(t))return {title:'瞬膜（第三眼瞼）位置',html:`<svg class="eye-diagram" viewBox="0 0 360 170"><path d="M35 85 Q180 15 325 85 Q180 155 35 85Z" fill="#fff" stroke="#77727f" stroke-width="5"/><circle cx="185" cy="85" r="42" fill="#7d6a55"/><circle cx="185" cy="85" r="20" fill="#222"/><path d="M42 85 Q75 60 104 82 Q78 108 42 85Z" fill="#e7b8c2" stroke="#b36b7b" stroke-width="3"/><path d="M91 54 L52 25" stroke="#6656e8" stroke-width="4"/><text x="22" y="20" font-size="17" fill="#4b3fd0" font-weight="700">瞬膜／第三眼瞼</text></svg>`,note:'位在眼睛內側靠鼻子的角落；正常清醒時不應大面積明顯外露。'};
-  return null;
-}
-function visualAidHtml(q,{compact=false}={}){
-  const items=visualCandidates(q),diagram=conceptDiagram(q);if(!items.length&&!diagram)return '';
-  const cards=items.map(x=>x.type==='breed'?`<figure class="visual-photo"><img src="${esc(x.url)}" alt="${esc(x.label)}參考照片" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.classList.add('image-failed')"><figcaption><b>${esc(x.label)}</b><span>${esc(x.note)}</span><small>圖片載入失敗時仍可看文字重點；連網後重試即可。</small></figcaption></figure>`:`<div class="visual-tool"><div class="tool-svg">${x.svg}</div><b>${esc(x.title)}</b><span>${esc(x.note)}</span></div>`).join('');
-  return `<div class="visual-aid ${compact?'compact':''}"><div class="visual-aid-title">看圖學這題</div>${diagram?`<div class="concept-diagram"><b>${esc(diagram.title)}</b>${diagram.html}<p>${esc(diagram.note)}</p></div>`:''}${cards?`<div class="visual-grid">${cards}</div>`:''}</div>`;
-}
-
-function teacherTags(q){
-  const text=`${q.prompt} ${q.options.join(' ')}`;const tags=[];
-  if(/何者為非|何者非|錯誤|不正確|不恰當|不是|非屬|不得|無需|不會|不可|不可能/.test(q.prompt))tags.push('反向題');
-  if(/\d|幾|多久|多少|公分|公尺|英吋|℃|天|月|年|顆|碼|分鐘|小時|%/.test(text))tags.push('數字題');
-  if(/原產地|犬種|貓種|毛質|體型|步態|胸型|耳型|尾型/.test(text))tags.push('犬貓特徵');
-  if(/法|辦法|規定|主管機關|許可|登記|依法/.test(text)||q.section==='02')tags.push('法規');
-  if(/疾病|病毒|細菌|寄生蟲|維生素|體溫|傳染|症狀|牙齒|骨|營養/.test(text)||q.section==='03')tags.push('保健衛生');
-  if(/行為|社會化|攻擊|發情|情緒|壓力/.test(text)||q.section==='04')tags.push('行為');
-  if(/剪|梳|電剪|工具|美容桌|烘|吹|消毒|清潔/.test(text)||q.section==='05'||q.section==='06')tags.push('美容操作');
-  return [...new Set(tags)].slice(0,4);
-}
-function teacherNote(q){
-  const answerText=q.options[q.answer-1]||'',curated=CURATED_TEACHER_NOTES[q.originId||q.id],tags=teacherTags(q),negative=/何者為非|何者非|錯誤|不正確|不恰當|不是|非屬|不得|無需|不會|不可|不可能/.test(q.prompt);
-  if(curated){
-    const key=x=>String(x||'').replace(/[。．，、；：!?！？\s]+$/g,'').trim();
-    const choices=q.options.map(o=>curated.choiceNotes?.[key(o)]||`${key(o)}：這個選項的逐項說明尚未建立。`);
-    return {...curated,tags,answerText,choices};
-  }
-  let lessonType='記憶題',detailLevel='基礎講解',concept='',why='',memory='',choices=[];
-  if(/原產地/.test(q.prompt)){
-    concept='犬種／動物與原產地的固定配對。';
-    why=`這類題沒有太多可以靠邏輯推導的理由，考的是題庫中的固定配對：本題要記「${answerText}」。`;
-    memory=`把題幹中的品種名稱和「${answerText}」綁成一組記憶卡，不要只背答案字母。`;
-    detailLevel='記憶提示';
-  }else if(tags.includes('數字題')){
-    concept='固定數字、時間、尺寸或範圍的題庫記憶。';
-    why=`題庫指定答案為「${answerText}」。數字題多半不能只靠常識推，重點是把題幹關鍵詞和正確數字綁在一起，之後靠間隔複習記牢。`;
-    memory=`先記「${q.prompt.replace(/[？?].*$/,'').slice(0,34)} → ${answerText}」。`;
-    detailLevel='記憶提示';
-  }else if(tags.includes('法規')){
-    concept='法規條文中的主管機關、資格、程序、期限或禁止事項。';
-    why=`這題的考試標答是「${answerText}」。法規題不能用「我覺得應該」來推，應以這一版題庫的法定用語與標答為準。`;
-    memory='法規題先抓四件事：誰、做什麼、多久、具備什麼資格。';
-    detailLevel='題庫法規提示';
-  }else if(tags.includes('美容操作')){
-    lessonType='理解＋記憶題';
-    concept='美容工具、操作順序、安全或清潔原則。';
-    why=`本題題庫答案是「${answerText}」。這類題要把「題幹情境 → 正確工具／動作」連在一起；若涉及安全，通常優先考避免受傷、降低刺激、保持清潔與正確操作順序。`;
-    memory=`把「題幹情境 → ${answerText}」當成操作口訣。`;
-  }else if(tags.includes('保健衛生')){
-    lessonType='理解＋記憶題';
-    concept='寵物保健、生理構造、疾病、營養或衛生知識。';
-    why=`本題題庫答案是「${answerText}」。這一題目前尚未內建足夠的逐項醫理說明；先把標答和題幹關鍵詞配對，若你不能說出「為什麼」，請直接標記給老師，不把泛用文字當成完整理解。`;
-    memory=`先抓生理／疾病／症狀關鍵詞，再記「${answerText}」。`;
-    detailLevel='待補完整詳解';
-  }else if(tags.includes('行為')){
-    lessonType='理解＋記憶題';
-    concept='由年齡、動作、情境判讀寵物行為。';
-    why=`題庫答案是「${answerText}」。行為題應把題幹中的年齡、動作、環境或刺激和行為意義連起來；這題目前先提供題庫標答，若原因看不懂請標記給老師。`;
-    memory=`把情境關鍵詞和「${answerText}」成對記。`;
-    detailLevel='基礎講解';
-  }else if(negative){
-    concept='反向題：找「不符合／錯誤／不是」的唯一例外。';
-    why=`題庫答案是「${answerText}」。但只知道它是「例外」還不等於理解；這題目前沒有足夠的逐項知識說明，所以不再用「其他選項都符合」當作老師講解。`;
-    memory='先圈住題幹的「不／非／錯誤」，再確認你能說出答案為何是例外。';
-    detailLevel='待補完整詳解';
-  }else{
-    concept='題庫中的固定知識配對。';
-    why=`題庫答案為「${answerText}」。這題目前以記住「題幹關鍵詞 → 正確答案內容」為主；如果你無法解釋原因，請標記給老師，之後補成逐項詳解。`;
-    memory=`記答案內容「${answerText}」，不要只記 A/B/C/D。`;
-    detailLevel='記憶提示';
-  }
-  return {lessonType,detailLevel,concept,why,memory,tags,answerText,choices};
-}
-function teacherHtml(q,firstExposure=false,unknown=false,guessed=false){
-  const n=teacherNote(q),realDetail=n.detailLevel!=='待補完整詳解';
-  const status=unknown?'這次選「不知道」：已排進今日檢討，明天也會再確認。':guessed?'這題雖然答對但屬於猜對，明天會再考。':firstExposure?'第一次看到的題目，明天會再確認一次。':'';
-  const reverse=n.tags.includes('反向題')?'<div class="reverse-tip"><b>先注意：</b>題目問的是「不／非／錯誤」的那一個。</div>':'';
-  const choices=n.choices?.length?`<details class="learn-details"><summary>四個選項逐一看</summary>${n.choices.map((x,i)=>`<div class="choice-line"><span>${LETTERS[i]}</span><p>${esc(x)}</p></div>`).join('')}</details>`:'';
-  const why=realDetail&&n.why&&!/^題庫答案|^本題題庫答案|^題庫指定答案|^這題的考試標答/.test(n.why)?`<div class="why-box"><b>為什麼？</b><p>${esc(n.why)}</p></div>`:'';
-  const visual=visualAidHtml(q,{compact:true});
-  return `<div class="learn-card"><div class="learn-title">看懂這題</div>${reverse}<div class="answer-line"><b>答案：${LETTERS[q.answer-1]}　${esc(n.answerText)}</b></div>${visual}${why}${choices}<div class="memory-tip"><b>考試記法：</b>${esc(n.memory)}</div>${!realDetail?'<div class="teacher-warning">這題目前沒有硬塞制式講解；先用圖解與答案建立概念，之後再補真正有內容的原因。</div>':''}${status?`<p class="teacher-status">${esc(status)}</p>`:''}<div class="teacher-help-row"><button id="needHelpBtn" class="ghost small">${getProgress(q.originId||q.id).needsHelp?'✓ 已標記：需要補教材':'這題還看不懂，標記補教材'}</button></div></div>`;
-}
-
-async function wireTeacherAction(q){
-  const btn=document.querySelector('#needHelpBtn');if(!btn)return;btn.onclick=async()=>{const pid=q.originId||q.id,p={...getProgress(pid),needsHelp:!getProgress(pid).needsHelp};await saveProgress(p);btn.textContent=p.needsHelp?'✓ 已標記：需要補教材':'這題還看不懂，標記補教材';};
-}
 
 function shuffleQuestionChoices(q){
   if(q.image||q.imageLikely||!Array.isArray(q.options)||q.options.length!==4)return {...q};
-  const pairs=q.options.map((text,i)=>({text,correct:i+1===q.answer}));const mixed=shuffle(pairs);return {...q,options:mixed.map(x=>x.text),answer:mixed.findIndex(x=>x.correct)+1};
+  const pairs=q.options.map((text,i)=>({text,correct:i+1===q.answer})),mixed=shuffle(pairs);return {...q,options:mixed.map(x=>x.text),answer:mixed.findIndex(x=>x.correct)+1};
 }
-function prepareQuizQuestions(questions,mode){
-  if(mode==='history'||mode==='mock')return questions.map(q=>({...q}));
-  return questions.map(shuffleQuestionChoices);
-}
-
+function prepareQuizQuestions(questions,mode){if(mode==='history'||mode==='mock')return questions.map(q=>({...q}));return questions.map(shuffleQuestionChoices);}
 function startQuiz(questions,mode='practice',title='刷題',opts={}){
-  if(!questions?.length){toast('目前沒有符合條件的題目');return;}
-  state.session={questions:prepareQuizQuestions(questions,mode),index:0,mode,title,answers:[],selected:null,answered:false,guessed:false,unknown:false,firstExposure:false,startedAt:Date.now(),seconds:opts.seconds||null,noFeedback:!!opts.noFeedback,timer:null};
-  state.view='study';document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-study'));document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view==='study'));renderQuiz();
+  if(!questions?.length){toast('目前沒有符合條件的題目');return;}state.session={questions:prepareQuizQuestions(questions,mode),index:0,mode,title,answers:[],selected:null,answered:false,unknown:false,startedAt:Date.now(),seconds:opts.seconds||null,noFeedback:!!opts.noFeedback,timer:null};state.view='study';document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-study'));document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view==='study'));renderQuiz();
 }
 function renderQuiz(){
-  const s=state.session;if(!s)return renderStudy();if(s.index>=s.questions.length)return finishQuiz();const q=s.questions[s.index],p=getProgress(q.originId||q.id),v=document.querySelector('#view-study');
-  const timeHtml=s.seconds!=null?`<span id="timer" class="pill warn">${formatTime(Math.max(0,s.seconds-Math.floor((Date.now()-s.startedAt)/1000)))}</span>`:`<span class="pill">${s.index+1}/${s.questions.length}</span>`;
-  const seen=exposureCount(p)>0;
-  v.innerHTML=`<div class="question-head"><div><div class="eyebrow">${esc(s.title)}</div><div class="question-no">${esc(q.sectionName)} · 第 ${q.number} 題</div></div>${timeHtml}</div><div class="progress" style="margin:12px 0 18px"><i style="width:${pct(s.index,s.questions.length)}%"></i></div><div class="card"><div class="row" style="justify-content:space-between"><span class="pill ${(p.wrong||p.unknown)?'bad':''}">${seen?`看過 ${exposureCount(p)} 次 · 錯 ${p.wrong||0} · 不知道 ${p.unknown||0}`:'第一次出現'}</span><button id="starQuestion" class="ghost small">${p.starred?'★ 已收藏':'☆ 收藏'}</button></div><div class="question-text">${esc(q.prompt)}</div>${q.image?`<figure class="question-figure"><img src="${esc(q.image)}" alt="${esc(q.imageAlt||'原題圖示')}" loading="eager"></figure>`:(q.imageLikely?'<div class="banner">這題含原題圖示；請以題目圖片為準。</div>':'')}${!s.noFeedback&&visualAidHtml(q)?`<button id="showVisualBtn" class="visual-toggle ghost wide">看圖片／圖解再作答</button><div id="preVisual" hidden>${visualAidHtml(q)}</div>`:''}<div class="options">${q.options.map((o,i)=>`<button class="option" data-answer="${i+1}"><span class="letter">${LETTERS[i]}</span><span>${esc(o)}</span></button>`).join('')}</div><div id="feedback"></div>${s.noFeedback?'':`<div class="learning-actions"><button id="unknownBtn" class="secondary">完全不知道，直接學這題</button><button id="guessBtn" class="ghost">不確定／這題我是猜的</button></div>`}<div class="quiz-actions"><button id="nextBtn" class="primary" disabled>${s.index===s.questions.length-1?'完成':'下一題'}</button></div></div><button id="quitQuiz" class="ghost wide">先離開</button>`;
-  [...v.querySelectorAll('.option')].forEach(btn=>btn.onclick=()=>selectAnswer(Number(btn.dataset.answer)));
-  v.querySelector('#unknownBtn')?.addEventListener('click',()=>revealUnknown());
-  v.querySelector('#showVisualBtn')?.addEventListener('click',e=>{const box=v.querySelector('#preVisual');box.hidden=!box.hidden;e.currentTarget.textContent=box.hidden?'看圖片／圖解再作答':'收起圖片／圖解';});
-  v.querySelector('#guessBtn')?.addEventListener('click',()=>toggleGuess());
-  v.querySelector('#nextBtn').onclick=()=>advanceQuiz();v.querySelector('#quitQuiz').onclick=()=>{if(s.mode==='mock')confirmAction('離開模擬考？','目前進度不會計入模考成績。',()=>{clearQuizTimer();state.session=null;navigate('exam');});else{clearQuizTimer();state.session=null;navigate('home');}};
-  v.querySelector('#starQuestion').onclick=async()=>{const pid=q.originId||q.id,pp={...getProgress(pid),starred:!getProgress(pid).starred};await saveProgress(pp);v.querySelector('#starQuestion').textContent=pp.starred?'★ 已收藏':'☆ 收藏';};
+  const s=state.session;if(!s)return renderStudy();if(s.index>=s.questions.length)return finishQuiz();const q=s.questions[s.index],p=getProgress(q.originId||q.id),v=document.querySelector('#view-study'),timeHtml=s.seconds!=null?`<span id="timer" class="pill warn">${formatTime(Math.max(0,s.seconds-Math.floor((Date.now()-s.startedAt)/1000)))}</span>`:`<span class="pill">${s.index+1}/${s.questions.length}</span>`,canExclude=!['mock','history'].includes(s.mode)&&!q.originId;
+  v.innerHTML=`<div class="question-head"><div><div class="eyebrow">${esc(s.title)}</div><div class="question-no">${esc(q.sectionName)} · 第 ${q.number} 題</div></div>${timeHtml}</div><div class="progress" style="margin:12px 0 18px"><i style="width:${pct(s.index,s.questions.length)}%"></i></div><div class="card"><div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap"><span class="pill ${(p.wrong||p.unknown)?'bad':''}">${exposureCount(p)?`做過 ${exposureCount(p)} 次 · 錯 ${p.wrong||0} · 不知道 ${p.unknown||0}`:'第一次出現'}</span><div class="row" style="gap:6px"><button id="starQuestion" class="ghost small">${p.starred?'★ 已收藏':'☆ 收藏'}</button>${canExclude?'<button id="excludeQuestion" class="ghost small">永久排除</button>':''}</div></div><div class="question-text">${esc(q.prompt)}</div>${q.image?`<figure class="question-figure"><img src="${esc(q.image)}" alt="${esc(q.imageAlt||'原題圖示')}" loading="eager"></figure>`:(q.imageLikely?'<div class="banner">這題含原題圖示；請以原題圖片為準。</div>':'')}<div class="options">${q.options.map((o,i)=>`<button class="option" data-answer="${i+1}"><span class="letter">${LETTERS[i]}</span><span>${esc(o)}</span></button>`).join('')}</div><div id="feedback"></div>${s.noFeedback?'':`<div class="learning-actions"><button id="unknownBtn" class="secondary">不知道，直接看答案</button></div>`}<div class="quiz-actions"><button id="nextBtn" class="primary" disabled>${s.index===s.questions.length-1?'完成':'下一題'}</button></div></div><button id="quitQuiz" class="ghost wide">先離開</button>`;
+  v.querySelectorAll('.option').forEach(btn=>btn.onclick=()=>selectAnswer(Number(btn.dataset.answer)));v.querySelector('#unknownBtn')?.addEventListener('click',revealUnknown);v.querySelector('#nextBtn').onclick=advanceQuiz;v.querySelector('#quitQuiz').onclick=()=>{if(s.mode==='mock')confirmAction('離開模擬考？','目前進度不會計入模考成績。',()=>{clearQuizTimer();state.session=null;navigate('exam');});else{clearQuizTimer();state.session=null;navigate('home');}};
+  v.querySelector('#starQuestion').onclick=async()=>{const pid=q.originId||q.id,pp={...getProgress(pid),starred:!getProgress(pid).starred};await saveProgress(pp);v.querySelector('#starQuestion').textContent=pp.starred?'★ 已收藏':'☆ 收藏';};v.querySelector('#excludeQuestion')?.addEventListener('click',()=>excludeCurrentQuestion(q));
   if(s.seconds!=null){clearQuizTimer();s.timer=setInterval(()=>{const rem=s.seconds-Math.floor((Date.now()-s.startedAt)/1000),el=document.querySelector('#timer');if(el)el.textContent=formatTime(Math.max(0,rem));if(rem<=0){clearQuizTimer();toast('時間到，自動交卷');finishQuiz(true);}},1000);}
 }
-function setAnsweredUI(q,{correct=false,unknown=false,firstExposure=false}){
-  const s=state.session,v=document.querySelector('#view-study');v.querySelectorAll('.option').forEach(btn=>{const x=Number(btn.dataset.answer);btn.disabled=true;if(!s.noFeedback){if(x===q.answer)btn.classList.add('correct');if(!unknown&&x===s.selected&&!correct)btn.classList.add('wrong');}});v.querySelector('#nextBtn').disabled=false;
-  const u=v.querySelector('#unknownBtn');if(u)u.hidden=true;const g=v.querySelector('#guessBtn');if(g){if(unknown||!correct)g.hidden=true;else{g.hidden=false;g.textContent=s.guessed?'✓ 已標記：我是猜的':'這題其實是猜的';}}
-  if(!s.noFeedback){const fb=v.querySelector('#feedback');fb.className=`feedback ${unknown?'learn':(correct?'correct':'wrong')}`;const lead=unknown?`<b>先學這題。</b> 正確答案是 ${LETTERS[q.answer-1]}。`:correct?`<b>答對。</b>${s.guessed?' 但這題是猜的，所以仍要複習。':''}`:`<b>答錯。</b> 正確答案是 ${LETTERS[q.answer-1]}。`;
-    fb.innerHTML=`${lead}${teacherHtml(q,firstExposure,unknown,s.guessed)}`;wireTeacherAction(q);
-  }
+async function excludeCurrentQuestion(q){
+  confirmAction('永久排除這題？','排除後，每日作業、自由刷題、錯題複習、模考與題庫更新都不會再出現；只能到設定恢復。',async()=>{const ids=new Set(getMeta('excludedQuestionIds',[])||[]);ids.add(q.id);await setMeta('excludedQuestionIds',[...ids].sort());await reloadQuestions();for(const kind of ['professional','firstaid'])await ensureCycle(kind);const s=state.session;if(s){s.questions.splice(s.index,1);s.answered=false;s.selected=null;s.unknown=false;}toast('已永久排除這題');if(!state.session?.questions.length){state.session=null;navigate('home');}else renderQuiz();});
 }
-async function selectAnswer(n){
-  const s=state.session;if(!s||s.answered)return;s.selected=n;s.answered=true;const q=s.questions[s.index],firstExposure=exposureCount(getProgress(q.originId||q.id))===0,correct=n===q.answer;s.firstExposure=firstExposure;
-  s.answers.push({id:q.id,chosen:n,answer:q.answer,correct,guessed:s.guessed,unknown:false});
-  if(s.mode!=='mock')await recordAnswer(q,n,{guessed:s.guessed,unknown:false});
-  setAnsweredUI(q,{correct,unknown:false,firstExposure});
+function setAnsweredUI(q,{correct=false,unknown=false}){
+  const s=state.session,v=document.querySelector('#view-study');v.querySelectorAll('.option').forEach(btn=>{const x=Number(btn.dataset.answer);btn.disabled=true;if(!s.noFeedback){if(x===q.answer)btn.classList.add('correct');if(!unknown&&x===s.selected&&!correct)btn.classList.add('wrong');}});v.querySelector('#nextBtn').disabled=false;const u=v.querySelector('#unknownBtn');if(u)u.hidden=true;if(!s.noFeedback){const answerText=q.options[q.answer-1]||'';const fb=v.querySelector('#feedback');fb.className=`feedback ${unknown?'learn':(correct?'correct':'wrong')}`;fb.innerHTML=correct?`<b>答對。</b> 正確答案：${LETTERS[q.answer-1]}　${esc(answerText)}`:`<b>${unknown?'不知道':'答錯'}。</b> 正確答案：${LETTERS[q.answer-1]}　${esc(answerText)}<div class="small-text" style="margin-top:8px">已記入待複習。</div>`;}
 }
-async function revealUnknown(){
-  const s=state.session;if(!s||s.answered||s.noFeedback)return;const q=s.questions[s.index],firstExposure=exposureCount(getProgress(q.originId||q.id))===0;s.answered=true;s.unknown=true;s.selected=null;s.firstExposure=firstExposure;s.guessed=false;
-  s.answers.push({id:q.id,chosen:null,answer:q.answer,correct:false,guessed:false,unknown:true});await recordAnswer(q,null,{unknown:true});setAnsweredUI(q,{correct:false,unknown:true,firstExposure});
-}
-async function toggleGuess(){
-  const s=state.session;if(!s||s.noFeedback)return;const v=document.querySelector('#view-study'),g=v.querySelector('#guessBtn');
-  if(!s.answered){s.guessed=!s.guessed;if(g)g.textContent=s.guessed?'✓ 已先標記：我是猜的':'不確定／這題我是猜的';return;}
-  const last=s.answers[s.answers.length-1];if(!last||last.unknown||!last.correct||last.guessed)return;s.guessed=true;last.guessed=true;const q=s.questions[s.index];await markLatestAnswerGuessed(q);if(g)g.textContent='✓ 已標記：我是猜的';const fb=v.querySelector('#feedback');if(fb){fb.innerHTML=`<b>答對。</b> 但這題是猜的，所以仍要複習。${teacherHtml(q,s.firstExposure,false,true)}`;wireTeacherAction(q);}
-}
-function advanceQuiz(){const s=state.session;if(!s?.answered)return;s.index++;s.selected=null;s.answered=false;s.guessed=false;s.unknown=false;s.firstExposure=false;renderQuiz();}
+async function selectAnswer(n){const s=state.session;if(!s||s.answered)return;s.selected=n;s.answered=true;const q=s.questions[s.index],correct=n===q.answer;s.answers.push({id:q.id,chosen:n,answer:q.answer,correct,unknown:false});if(s.mode!=='mock'&&s.mode!=='history')await recordAnswer(q,n,{unknown:false,mode:s.mode});setAnsweredUI(q,{correct,unknown:false});}
+async function revealUnknown(){const s=state.session;if(!s||s.answered||s.noFeedback)return;const q=s.questions[s.index];s.answered=true;s.unknown=true;s.selected=null;s.answers.push({id:q.id,chosen:null,answer:q.answer,correct:false,unknown:true});await recordAnswer(q,null,{unknown:true,mode:s.mode});setAnsweredUI(q,{correct:false,unknown:true});}
+function advanceQuiz(){const s=state.session;if(!s?.answered)return;s.index++;s.selected=null;s.answered=false;s.unknown=false;renderQuiz();}
 
-async function finishQuiz(force=false){const s=state.session;if(!s)return;clearQuizTimer();if(s.mode==='history'){
-    const correct=s.answers.filter(a=>a.correct).length;const total=s.questions.length;const score=Number((correct*1.25).toFixed(2));const results=getMeta('historyResults',[]);const paperId=s.questions[0]?.section||'';results.push({at:new Date().toISOString(),paperId,label:s.title,score,correct,total});await setMeta('historyResults',results.slice(-40));
-    const byCat={};for(const a of s.answers){const q=s.questions.find(q=>q.id===a.id);if(!q)continue;const name=q.matchedSection||'未分類';byCat[name]??={n:0,c:0};byCat[name].n++;if(a.correct)byCat[name].c++;}
-    const v=document.querySelector('#view-study');v.innerHTML=`<div class="hero"><div class="eyebrow" style="color:#ded9ff">PAST EXAM RESULT</div><h2>${score} 分 · ${score>=60?'及格':'未及格'}</h2><p>${esc(s.title)} · 答對 ${correct}/${total} 題</p></div><div class="card"><h3>這份考卷的弱點</h3>${Object.entries(byCat).map(([name,x])=>`<div class="stat-row"><span>${esc(name)}</span><div class="progress"><i style="width:${pct(x.c,x.n)}%"></i></div><b>${pct(x.c,x.n)}%</b></div>`).join('')}</div><div class="grid2"><button id="reviewHistory" class="secondary" ${correct===total?'disabled':''}>重做本次錯題</button><button id="backHistory" class="primary">回歷屆試題</button></div>`;
-    v.querySelector('#reviewHistory').onclick=()=>{const ids=s.answers.filter(a=>!a.correct).map(a=>a.id);const retry=s.questions.filter(q=>ids.includes(q.id));state.session=null;startQuiz(retry,'review',`${s.title} 錯題`);};v.querySelector('#backHistory').onclick=()=>{state.session=null;renderHistory(true);};return;
+async function finishQuiz(force=false){
+  const s=state.session;if(!s)return;clearQuizTimer();
+  if(s.mode==='history'){
+    for(const a of s.answers){const q=s.questions.find(x=>x.id===a.id);if(q?.originId)await recordAnswer(q,a.chosen,{unknown:false,mode:'history'});}
+    const correct=s.answers.filter(a=>a.correct).length,total=s.questions.length,score=Number((correct*1.25).toFixed(2)),results=getMeta('historyResults',[]),paperId=s.questions[0]?.section||'';results.push({at:new Date().toISOString(),paperId,label:s.title,score,correct,total});await setMeta('historyResults',results.slice(-40));
+    const v=document.querySelector('#view-study');v.innerHTML=`<div class="hero"><div class="eyebrow" style="color:#ded9ff">PAST EXAM RESULT</div><h2>${score} 分 · ${score>=60?'及格':'未及格'}</h2><p>${esc(s.title)} · 答對 ${correct}/${total} 題</p></div><div class="grid2"><button id="reviewHistory" class="secondary" ${correct===total?'disabled':''}>重做本次錯題</button><button id="backHistory" class="primary">回歷屆試題</button></div>`;v.querySelector('#reviewHistory').onclick=()=>{const ids=s.answers.filter(a=>!a.correct).map(a=>a.id),retry=s.questions.filter(q=>ids.includes(q.id));state.session=null;startQuiz(retry,'review',`${s.title} 錯題`);};v.querySelector('#backHistory').onclick=()=>{state.session=null;renderHistory(true);};return;
   }
   if(s.mode==='mock'){
-    for(const a of s.answers){const q=state.questions.find(q=>q.id===a.id);if(q)await recordAnswer(q,a.chosen,{guessed:false,unknown:false});}
-    const correct=s.answers.filter(a=>a.correct).length;const score=Number((correct*1.25).toFixed(2));const results=getMeta('mockResults',[]);results.push({at:new Date().toISOString(),score,correct,total:80});await setMeta('mockResults',results.slice(-30));
-    const byCat={};for(const a of s.answers){const q=state.questions.find(q=>q.id===a.id);if(!q)continue;byCat[q.sectionName]??={n:0,c:0};byCat[q.sectionName].n++;if(a.correct)byCat[q.sectionName].c++;}
-    const v=document.querySelector('#view-study');v.innerHTML=`<div class="hero"><div class="eyebrow" style="color:#ded9ff">MOCK RESULT</div><h2>${score} 分 · ${score>=60?'及格':'未及格'}</h2><p>答對 ${correct}/80 題${force?'（時間到）':''}</p></div><div class="card"><h3>科目表現</h3>${Object.entries(byCat).map(([name,x])=>`<div class="stat-row"><span>${esc(name)}</span><div class="progress"><i style="width:${pct(x.c,x.n)}%"></i></div><b>${pct(x.c,x.n)}%</b></div>`).join('')}</div><div class="grid2"><button id="reviewMock" class="secondary">複習本次錯題</button><button id="backExam" class="primary">回模考首頁</button></div>`;v.querySelector('#reviewMock').onclick=()=>{const ids=s.answers.filter(a=>!a.correct).map(a=>a.id);state.session=null;startQuiz(state.questions.filter(q=>ids.includes(q.id)),'review','模考錯題');};v.querySelector('#backExam').onclick=()=>{state.session=null;navigate('exam');};return;
+    for(const a of s.answers){const q=state.questions.find(q=>q.id===a.id);if(q)await recordAnswer(q,a.chosen,{unknown:false,mode:'mock'});}const correct=s.answers.filter(a=>a.correct).length,score=Number((correct*1.25).toFixed(2)),results=getMeta('mockResults',[]);results.push({at:new Date().toISOString(),score,correct,total:80});await setMeta('mockResults',results.slice(-30));const v=document.querySelector('#view-study');v.innerHTML=`<div class="hero"><div class="eyebrow" style="color:#ded9ff">MOCK RESULT</div><h2>${score} 分 · ${score>=60?'及格':'未及格'}</h2><p>答對 ${correct}/80 題${force?'（時間到）':''}</p></div><div class="grid2"><button id="reviewMock" class="secondary">複習本次錯題</button><button id="backExam" class="primary">回模考首頁</button></div>`;v.querySelector('#reviewMock').onclick=()=>{const ids=s.answers.filter(a=>!a.correct).map(a=>a.id);state.session=null;startQuiz(state.questions.filter(q=>ids.includes(q.id)),'review','模考錯題');};v.querySelector('#backExam').onclick=()=>{state.session=null;navigate('exam');};return;
   }
-  const c=s.answers.filter(a=>a.correct).length,u=s.answers.filter(a=>a.unknown).length,w=s.answers.filter(a=>!a.correct&&!a.unknown).length,g=s.answers.filter(a=>a.correct&&a.guessed).length,answered=c+w;const reviewIds=[...new Set(s.answers.filter(a=>a.unknown||!a.correct||a.guessed).map(a=>a.id))];const v=document.querySelector('#view-study');v.innerHTML=`<div class="hero"><div class="eyebrow" style="color:#ded9ff">CLASS COMPLETE</div><h2>${s.answers.length} 題學習完成</h2><p>答對 ${c} · 答錯 ${w}${u?` · 不知道 ${u}`:''}${g?` · 猜對 ${g}`:''}${answered?` · 作答正確率 ${pct(c,answered)}%`:''}</p></div><div class="card"><h3>老師判定</h3><p class="muted">${reviewIds.length?`這輪有 ${reviewIds.length} 題還沒真正掌握，已排進今日檢討。先看懂講解，再重做一次，比一直往後衝新題有效。`:'這輪每題都確定答對，可以繼續推進新題。'}</p></div><div class="grid2"><button id="reviewSession" class="secondary" ${!reviewIds.length?'disabled':''}>馬上檢討本輪 (${reviewIds.length})</button><button id="finishHome" class="primary">回今日首頁</button></div>`;v.querySelector('#reviewSession').onclick=()=>{const retry=s.questions.filter(q=>reviewIds.includes(q.id));state.session=null;startQuiz(retry,'review','本輪檢討');};v.querySelector('#finishHome').onclick=()=>{state.session=null;navigate('home');};
+  const c=s.answers.filter(a=>a.correct).length,u=s.answers.filter(a=>a.unknown).length,w=s.answers.filter(a=>!a.correct&&!a.unknown).length,reviewIds=[...new Set(s.answers.filter(a=>a.unknown||!a.correct).map(a=>a.id))],v=document.querySelector('#view-study');v.innerHTML=`<div class="hero"><div class="eyebrow" style="color:#ded9ff">DONE</div><h2>${s.answers.length} 題完成</h2><p>答對 ${c} · 答錯 ${w}${u?` · 不知道 ${u}`:''}</p></div><div class="card"><h3>本輪錯題</h3><p class="muted">${reviewIds.length?`有 ${reviewIds.length} 題已記入待複習。`:'這輪沒有待複習題。'}</p></div><div class="grid2"><button id="reviewSession" class="secondary" ${!reviewIds.length?'disabled':''}>馬上重做 (${reviewIds.length})</button><button id="finishHome" class="primary">回今日首頁</button></div>`;v.querySelector('#reviewSession').onclick=()=>{const retry=s.questions.filter(q=>reviewIds.includes(q.id));state.session=null;startQuiz(retry,'review','本輪錯題');};v.querySelector('#finishHome').onclick=()=>{state.session=null;navigate('home');};
 }
+
 function clearQuizTimer(){if(state.session?.timer){clearInterval(state.session.timer);state.session.timer=null;}}
 function formatTime(sec){const m=Math.floor(sec/60),s=sec%60;return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;}
 
 function openSyncDialog(){renderSyncStatus();document.querySelector('#syncDialog').showModal();}
 function syncMsg(msg){document.querySelector('#syncStatus').innerHTML=`<div class="banner">${esc(msg)}</div>`;}
-function renderSyncStatus(){const b=bankInfo();document.querySelector('#syncStatus').innerHTML=`<div class="sync-line"><span>專業題庫</span><b>${b.professional}/647</b></div>${SOURCES.common.map(s=>`<div class="sync-line"><span>${esc(s.label)}</span><b>${b.byCommon[s.code]||0}/${s.expected}</b></div>`).join('')}`;}
-async function autoSync(){const btn=document.querySelector('#autoSyncBtn');btn.disabled=true;try{await loadBundledProfessional(syncMsg);await loadPdfJs();for(const src of SOURCES.common)await syncOneCommon(src,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);syncMsg(`同步完成：專業 ${bankInfo().professional}/647，共同 ${bankInfo().common} 題。`);renderSyncStatus();toast('完整題庫同步完成');renderHome();}catch(e){console.error(e);syncMsg(`同步沒有完成：${e.message}。專業題可按「修復內建 647 題」，共同科目可再單獨同步。`);}finally{btn.disabled=false;}}
-async function repairProfessional(){const btn=document.querySelector('#repairProfessionalBtn');if(btn)btn.disabled=true;try{const qs=await loadBundledProfessional(syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);renderSyncStatus();syncMsg(`專業題庫已修復 ${qs.length}/647 題。原本的作答與錯題紀錄會保留。`);toast('專業 647 題已修復');renderHome();}catch(e){console.error(e);syncMsg(`專業題庫修復失敗：${e.message}`);}finally{if(btn)btn.disabled=false;}}
-async function syncCommon(){const btn=document.querySelector('#syncCommonBtn');btn.disabled=true;try{await loadPdfJs();for(const src of SOURCES.common)await syncOneCommon(src,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);renderSyncStatus();toast('共同科目更新完成');}catch(e){syncMsg(`共同科目同步失敗：${e.message}`);}finally{btn.disabled=false;}}
-async function importProfessionalFile(file){if(!file)return;try{await loadPdfJs();const buf=await file.arrayBuffer();const qs=await importProfessionalBuffer(buf,syncMsg);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);renderSyncStatus();syncMsg(`專業題庫已匯入 ${qs.length} 題。`);toast('專業題庫匯入完成');renderHome();}catch(e){syncMsg(`匯入失敗：${e.message}`);}}
+function renderSyncStatus(){const b=bankInfo();document.querySelector('#syncStatus').innerHTML=`<div class="sync-line"><span>專業題庫</span><b>${b.professional}+排除 ${b.excludedProfessional}/647</b></div><div class="sync-line"><span>寵物急救練習</span><b>${b.firstaid}+排除 ${b.excludedFirstAid}/80</b></div>${SOURCES.common.map(s=>`<div class="sync-line"><span>${esc(s.label)}</span><b>${b.byCommon[s.code]||0}/${s.expected}</b></div>`).join('')}`;}
+async function autoSync(){const btn=document.querySelector('#autoSyncBtn');btn.disabled=true;try{await loadBundledProfessional(syncMsg);await loadBundledFirstAid(syncMsg);await loadPdfJs();for(const src of SOURCES.common)await syncOneCommon(src,syncMsg);await reloadQuestions();await ensureCycle('professional');await ensureCycle('firstaid');syncMsg(`同步完成：美容 647 題、急救 80 題、共同 ${bankInfo().common} 題。永久排除清單已保留。`);renderSyncStatus();toast('題庫同步完成');renderHome();}catch(e){console.error(e);syncMsg(`同步沒有完成：${e.message}`);}finally{btn.disabled=false;}}
+async function repairProfessional(){const btn=document.querySelector('#repairProfessionalBtn');if(btn)btn.disabled=true;try{const qs=await loadBundledProfessional(syncMsg);await reloadQuestions();await ensureCycle('professional');renderSyncStatus();syncMsg(`專業題庫已修復 ${qs.length}/647 題；永久排除題不會復活，作答與錯題紀錄保留。`);toast('專業 647 題已修復');renderHome();}catch(e){console.error(e);syncMsg(`專業題庫修復失敗：${e.message}`);}finally{if(btn)btn.disabled=false;}}
+async function syncCommon(){const btn=document.querySelector('#syncCommonBtn');btn.disabled=true;try{await loadPdfJs();for(const src of SOURCES.common)await syncOneCommon(src,syncMsg);await reloadQuestions();renderSyncStatus();toast('共同科目更新完成');}catch(e){syncMsg(`共同科目同步失敗：${e.message}`);}finally{btn.disabled=false;}}
+async function importProfessionalFile(file){if(!file)return;try{await loadPdfJs();const buf=await file.arrayBuffer();const qs=await importProfessionalBuffer(buf,syncMsg);await reloadQuestions();await ensureCycle('professional');renderSyncStatus();syncMsg(`專業題庫已匯入 ${qs.length} 題；永久排除清單已保留。`);toast('專業題庫匯入完成');renderHome();}catch(e){syncMsg(`匯入失敗：${e.message}`);}}
 
-async function exportBackup(){const data=backupPayload();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`寵物美容丙級_學習備份_${today()}.json`;a.click();URL.revokeObjectURL(a.href);}
-async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(!Array.isArray(data.progress))throw new Error('格式不正確');await bulkPut(STORE_P,data.progress);for(const p of data.progress)state.progress.set(p.id,p);if(data.meta)for(const [k,v] of Object.entries(data.meta))await setMeta(k,v);await writeAutoSnapshot('匯入備份');toast('學習紀錄已還原');renderSettings();}catch(err){toast('備份檔無法匯入');}}
+async function exportBackup(){const data=backupPayload();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`寵物美容與急救_學習備份_${today()}.json`;a.click();URL.revokeObjectURL(a.href);}
+async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{const data=JSON.parse(await f.text());if(!Array.isArray(data.progress))throw new Error('格式不正確');await bulkPut(STORE_P,data.progress);for(const p of data.progress)state.progress.set(p.id,p);if(data.meta)for(const [k,v] of Object.entries(data.meta))await setMeta(k,v);await migrateExclusions();await reloadQuestions();await ensureCycle('professional');await ensureCycle('firstaid');await writeAutoSnapshot('匯入備份');toast('學習紀錄已還原');renderSettings();}catch(err){console.error(err);toast('備份檔無法匯入');}}
 function confirmAction(title,text,fn){const d=document.querySelector('#confirmDialog');d.querySelector('#confirmTitle').textContent=title;d.querySelector('#confirmText').textContent=text;const ok=d.querySelector('#confirmOk');ok.onclick=()=>setTimeout(fn,0);d.showModal();}
 
+
 async function init(){
-  db=await openDB();state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));
-  // v8 重新套用內建 647 題；程式更新不會清除作答／錯題紀錄。
-  if(state.questions.filter(q=>q.kind==='professional').length!==SOURCES.professional.expected||getMeta('bundledProfessionalVersion')!==APP_VERSION){
-    try{await loadBundledProfessional(()=>{});await setMeta('bundledProfessionalVersion',APP_VERSION);state.questions=(await getAll(STORE_Q)).filter(q=>q.active!==false);}catch(e){console.warn('bundled professional bank load failed',e);}
-  }
-  document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));
-  document.querySelector('#autoSyncBtn').onclick=autoSync;document.querySelector('#repairProfessionalBtn')?.addEventListener('click',repairProfessional);document.querySelector('#syncCommonBtn').onclick=syncCommon;document.querySelector('#importProfessionalBtn').onclick=()=>document.querySelector('#professionalFile').click();document.querySelector('#professionalFile').onchange=e=>importProfessionalFile(e.target.files?.[0]);
-  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;const btn=document.querySelector('#installBtn');btn.hidden=false;btn.onclick=async()=>{deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;btn.hidden=true;};});
-  if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);
-  await ensurePersistentStorage();
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')writeAutoSnapshot('離開 App');});
-  window.addEventListener('pagehide',()=>writeAutoSnapshot('關閉頁面'));
-  await writeAutoSnapshot('啟動 App');
-  renderHome();
-  setTimeout(()=>autoSyncCommonInBackground(),700);
+  db=await openDB();state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));await migrateExclusions();await reloadQuestions();
+  try{
+    if(state.questions.filter(q=>q.kind==='professional').length+excludedCount('professional')<SOURCES.professional.expected||getMeta('bundledProfessionalVersion')!==APP_VERSION){await loadBundledProfessional(()=>{});await setMeta('bundledProfessionalVersion',APP_VERSION);}
+    if(state.questions.filter(q=>q.kind==='firstaid').length+excludedCount('firstaid')<80||getMeta('bundledFirstAidVersion')!==APP_VERSION){await loadBundledFirstAid(()=>{});await setMeta('bundledFirstAidVersion',APP_VERSION);}
+    await reloadQuestions();await ensureCycle('professional');await ensureCycle('firstaid');
+  }catch(e){console.warn('bundled bank load failed',e);}
+  document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));document.querySelector('#autoSyncBtn').onclick=autoSync;document.querySelector('#repairProfessionalBtn')?.addEventListener('click',repairProfessional);document.querySelector('#syncCommonBtn').onclick=syncCommon;document.querySelector('#importProfessionalBtn').onclick=()=>document.querySelector('#professionalFile').click();document.querySelector('#professionalFile').onchange=e=>importProfessionalFile(e.target.files?.[0]);
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;const btn=document.querySelector('#installBtn');btn.hidden=false;btn.onclick=async()=>{deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;btn.hidden=true;};});if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);await ensurePersistentStorage();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')writeAutoSnapshot('離開 App');});window.addEventListener('pagehide',()=>writeAutoSnapshot('關閉頁面'));await writeAutoSnapshot('啟動 App');renderHome();setTimeout(()=>autoSyncCommonInBackground(),700);
 }
+
 init().catch(e=>{console.error(e);document.querySelector('#view-home').innerHTML=`<div class="banner bad"><b>App 啟動失敗</b><br>${esc(e.message)}</div>`;});
