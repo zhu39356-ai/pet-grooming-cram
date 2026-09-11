@@ -7,7 +7,7 @@ const STORE_P='progress';
 const STORE_M='meta';
 const STORE_B='snapshots';
 const LETTERS=['A','B','C','D'];
-const APP_VERSION='v11';
+const APP_VERSION='v11.1';
 const BUNDLED_PROF_URL='./data/professional-13900.json';
 const FIRSTAID_URL='./data/firstaid-practice.json';
 const DEFAULT_EXCLUDED_IDS=["13900-06-011", "13900-06-012", "13900-06-014", "13900-06-015", "13900-06-018", "13900-06-019", "13900-06-020", "13900-06-021", "13900-06-022", "13900-06-023", "13900-06-025", "13900-06-026", "13900-06-027", "13900-06-028", "13900-06-029", "13900-06-030", "13900-06-031", "13900-06-032", "13900-06-033", "13900-06-034", "13900-06-035", "13900-06-036", "13900-06-037", "13900-06-038", "13900-06-039", "13900-06-040", "13900-06-041", "13900-06-042"];
@@ -228,7 +228,15 @@ async function syncOneCommon(src,status){
   await bulkPut(STORE_Q,qs);await setMeta(`commonSync:${src.code}`,{at:new Date().toISOString(),count:qs.length,version:src.version});return qs;
 }
 async function replaceQuestionKind(kind,qs){
-  const all=await getAll(STORE_Q);const old=all.filter(q=>q.kind===kind);for(const q of old)await del(STORE_Q,q.id);await bulkPut(STORE_Q,qs);await reloadQuestions();
+  // 用同一個 IndexedDB transaction 完成刪除＋寫入，避免手機逐題開 transaction 卡住首頁。
+  const all=await getAll(STORE_Q);const old=all.filter(q=>q.kind===kind);
+  await new Promise((resolve,reject)=>{
+    const t=db.transaction(STORE_Q,'readwrite');const store=t.objectStore(STORE_Q);
+    for(const q of old)store.delete(q.id);
+    for(const q of qs)store.put(q);
+    t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||new Error('題庫更新中止'));
+  });
+  await reloadQuestions();
 }
 
 
@@ -433,15 +441,54 @@ async function importBackup(e){const f=e.target.files?.[0];if(!f)return;try{cons
 function confirmAction(title,text,fn){const d=document.querySelector('#confirmDialog');d.querySelector('#confirmTitle').textContent=title;d.querySelector('#confirmText').textContent=text;const ok=d.querySelector('#confirmOk');ok.onclick=()=>setTimeout(fn,0);d.showModal();}
 
 
-async function init(){
-  db=await openDB();state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));await migrateExclusions();await reloadQuestions();
-  try{
-    if(state.questions.filter(q=>q.kind==='professional').length+excludedCount('professional')<SOURCES.professional.expected||getMeta('bundledProfessionalVersion')!==APP_VERSION){await loadBundledProfessional(()=>{});await setMeta('bundledProfessionalVersion',APP_VERSION);}
-    if(state.questions.filter(q=>q.kind==='firstaid').length+excludedCount('firstaid')<80||getMeta('bundledFirstAidVersion')!==APP_VERSION){await loadBundledFirstAid(()=>{});await setMeta('bundledFirstAidVersion',APP_VERSION);}
-    await reloadQuestions();await ensureCycle('professional');await ensureCycle('firstaid');
-  }catch(e){console.warn('bundled bank load failed',e);}
-  document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));document.querySelector('#autoSyncBtn').onclick=autoSync;document.querySelector('#repairProfessionalBtn')?.addEventListener('click',repairProfessional);document.querySelector('#syncCommonBtn').onclick=syncCommon;document.querySelector('#importProfessionalBtn').onclick=()=>document.querySelector('#professionalFile').click();document.querySelector('#professionalFile').onchange=e=>importProfessionalFile(e.target.files?.[0]);
-  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;const btn=document.querySelector('#installBtn');btn.hidden=false;btn.onclick=async()=>{deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;btn.hidden=true;};});if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);await ensurePersistentStorage();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')writeAutoSnapshot('離開 App');});window.addEventListener('pagehide',()=>writeAutoSnapshot('關閉頁面'));await writeAutoSnapshot('啟動 App');renderHome();setTimeout(()=>autoSyncCommonInBackground(),700);
+function bindAppEvents(){
+  document.querySelectorAll('.bottom-nav button').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.view)));
+  document.querySelector('#autoSyncBtn').onclick=autoSync;
+  document.querySelector('#repairProfessionalBtn')?.addEventListener('click',repairProfessional);
+  document.querySelector('#syncCommonBtn').onclick=syncCommon;
+  document.querySelector('#importProfessionalBtn').onclick=()=>document.querySelector('#professionalFile').click();
+  document.querySelector('#professionalFile').onchange=e=>importProfessionalFile(e.target.files?.[0]);
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;const btn=document.querySelector('#installBtn');btn.hidden=false;btn.onclick=async()=>{deferredInstall.prompt();await deferredInstall.userChoice;deferredInstall=null;btn.hidden=true;};});
+  if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(console.warn);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')writeAutoSnapshot('離開 App');});
+  window.addEventListener('pagehide',()=>writeAutoSnapshot('關閉頁面'));
 }
 
-init().catch(e=>{console.error(e);document.querySelector('#view-home').innerHTML=`<div class="banner bad"><b>App 啟動失敗</b><br>${esc(e.message)}</div>`;});
+async function refreshBundledBanksInBackground(){
+  try{
+    const proCount=state.questions.filter(q=>q.kind==='professional').length+excludedCount('professional');
+    const faCount=state.questions.filter(q=>q.kind==='firstaid').length+excludedCount('firstaid');
+    if(proCount<SOURCES.professional.expected||getMeta('bundledProfessionalVersion')!==APP_VERSION){
+      await loadBundledProfessional(()=>{});await setMeta('bundledProfessionalVersion',APP_VERSION);
+    }
+    if(faCount<80||getMeta('bundledFirstAidVersion')!==APP_VERSION){
+      await loadBundledFirstAid(()=>{});await setMeta('bundledFirstAidVersion',APP_VERSION);
+    }
+    await reloadQuestions();await ensureCycle('professional');await ensureCycle('firstaid');renderHome();
+  }catch(e){
+    console.warn('bundled bank load failed',e);
+    toast(`題庫背景載入失敗：${e.message}`);
+    renderHome();
+  }
+}
+
+async function init(){
+  // 先把本機既有資料讀出並立即畫首頁；大型題庫更新一律放到背景，避免白畫面。
+  db=await openDB();
+  state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));
+  state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));
+  await migrateExclusions();await reloadQuestions();
+  bindAppEvents();
+  await ensureCycle('professional');await ensureCycle('firstaid');
+  renderHome();
+  // 以下皆不得阻塞首頁顯示。
+  refreshBundledBanksInBackground();
+  ensurePersistentStorage().catch(e=>console.warn('persistent storage failed',e));
+  writeAutoSnapshot('啟動 App').catch(e=>console.warn('startup snapshot failed',e));
+  setTimeout(()=>autoSyncCommonInBackground(),1200);
+}
+
+// HTML 本身先顯示載入訊息；即使 IndexedDB 啟動失敗，也不再留下整片空白。
+const homeBoot=document.querySelector('#view-home');
+if(homeBoot)homeBoot.innerHTML='<div class="card"><h3>正在開啟題庫…</h3><p class="muted small-text">先載入你的刷題紀錄，題庫更新會在背景進行。</p></div>';
+init().catch(e=>{console.error(e);const home=document.querySelector('#view-home');if(home)home.innerHTML=`<div class="banner bad"><b>App 啟動失敗</b><br>${esc(e?.message||e)}</div>`;});
