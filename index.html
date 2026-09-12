@@ -13,14 +13,19 @@
 <body>
   <header class="topbar">
     <div>
-      <div class="eyebrow">13900 寵物美容丙級 · 寵物急救</div>
+      <div class="eyebrow">13900 寵物美容丙級 · 寵物急救 · v12.1</div>
       <h1>我的刷題 PWA</h1>
     </div>
     <button id="installBtn" class="ghost small" hidden>安裝到手機</button>
   </header>
 
   <main id="app" class="app-shell">
-    <section id="view-home" class="view active"></section>
+    <section id="view-home" class="view active">
+      <div class="card" id="bootFallback">
+        <h3>v12.1 正在開啟題庫…</h3>
+        <p class="muted small-text">如果這段文字一直沒有消失，代表 JavaScript 沒有成功載入；請把畫面截圖給我，不要刪除學習資料。</p>
+      </div>
+    </section>
     <section id="view-study" class="view"></section>
     <section id="view-review" class="view"></section>
     <section id="view-exam" class="view"></section>
@@ -69,6 +74,6 @@
   </dialog>
 
   <div id="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./app.js?v=12.0"></script>
+  <script type="module" src="./app.js?v=12.1"></script>
 </body>
 </html>
