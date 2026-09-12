@@ -7,7 +7,7 @@ const STORE_P='progress';
 const STORE_M='meta';
 const STORE_B='snapshots';
 const LETTERS=['A','B','C','D'];
-const APP_VERSION='v11.1';
+const APP_VERSION='v12.0';
 const BUNDLED_PROF_URL='./data/professional-13900.json';
 const FIRSTAID_URL='./data/firstaid-practice.json';
 const DEFAULT_EXCLUDED_IDS=["13900-06-011", "13900-06-012", "13900-06-014", "13900-06-015", "13900-06-018", "13900-06-019", "13900-06-020", "13900-06-021", "13900-06-022", "13900-06-023", "13900-06-025", "13900-06-026", "13900-06-027", "13900-06-028", "13900-06-029", "13900-06-030", "13900-06-031", "13900-06-032", "13900-06-033", "13900-06-034", "13900-06-035", "13900-06-036", "13900-06-037", "13900-06-038", "13900-06-039", "13900-06-040", "13900-06-041", "13900-06-042"];
@@ -473,19 +473,43 @@ async function refreshBundledBanksInBackground(){
 }
 
 async function init(){
-  // 先把本機既有資料讀出並立即畫首頁；大型題庫更新一律放到背景，避免白畫面。
-  db=await openDB();
-  state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));
-  state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));
-  await migrateExclusions();await reloadQuestions();
-  bindAppEvents();
-  await ensureCycle('professional');await ensureCycle('firstaid');
-  renderHome();
-  // 以下皆不得阻塞首頁顯示。
-  refreshBundledBanksInBackground();
-  ensurePersistentStorage().catch(e=>console.warn('persistent storage failed',e));
-  writeAutoSnapshot('啟動 App').catch(e=>console.warn('startup snapshot failed',e));
-  setTimeout(()=>autoSyncCommonInBackground(),1200);
+  // 先顯示可操作的首頁，再初始化 IndexedDB；任何儲存/題庫問題都不能讓主畫面變成空白。
+  renderHomeSafe('正在載入學習資料…');
+  try{
+    db=await openDB();
+    state.progress=new Map((await getAll(STORE_P)).map(p=>[p.id,p]));
+    state.meta=Object.fromEntries((await getAll(STORE_M)).map(x=>[x.key,x.value]));
+    await migrateExclusions();
+    await reloadQuestions();
+    await ensureCycle('professional');
+    await ensureCycle('firstaid');
+    bindAppEvents();
+    renderHomeSafe();
+    refreshBundledBanksInBackground();
+    ensurePersistentStorage().catch(e=>console.warn('persistent storage failed',e));
+    writeAutoSnapshot('啟動 App').catch(e=>console.warn('startup snapshot failed',e));
+    setTimeout(()=>autoSyncCommonInBackground(),1200);
+  }catch(e){
+    console.error('App initialization failed',e);
+    renderHomeSafe(`資料初始化遇到問題：${e?.message||e}`);
+  }
+}
+
+function renderHomeSafe(message=''){
+  const v=document.querySelector('#view-home');
+  if(!v)return;
+  try{
+    renderHome();
+    if(message){
+      const note=document.createElement('div');
+      note.className='banner';
+      note.innerHTML=`<b>${esc(message)}</b><br><span class="small-text">如果題庫還在載入，請稍候；你也可以到「設定 → 同步／更新題庫」手動修復。</span>`;
+      v.prepend(note);
+    }
+  }catch(e){
+    console.error('Home render failed',e);
+    v.innerHTML=`<div class="banner bad"><b>首頁載入失敗</b><br><span class="small-text">${esc(e?.message||e)}</span></div><div class="card"><h3>先不要刪除學習資料</h3><p class="muted small-text">你的作答紀錄仍保留在手機本機。請先重新整理 App；若仍空白，再用「設定」中的備份／修復功能處理。</p></div>`;
+  }
 }
 
 // HTML 本身先顯示載入訊息；即使 IndexedDB 啟動失敗，也不再留下整片空白。

@@ -1,4 +1,4 @@
-const CACHE='pet-grooming-cram-v11-1';
+const CACHE='pet-grooming-cram-v12-0';
 const CORE=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./assets/icon.svg','./assets/q-13900-05-026.png','./data/sources.js','./data/professional-13900.json','./data/firstaid-practice.json'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
