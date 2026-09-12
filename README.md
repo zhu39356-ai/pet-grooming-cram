@@ -1,4 +1,4 @@
-# 寵物美容丙級＋寵物急救刷題 PWA v13.0
+# 寵物美容丙級＋寵物急救刷題 PWA v13.1
 
 ## v13.0 啟動修正
 
@@ -7,3 +7,9 @@
 - app.js 改為一般 defer script，提升 Samsung Internet / Android WebView 相容性。
 - 更新 Service Worker 快取版本，避免舊版 JS 持續被快取。
 - 題庫、錯題、排除題與學習紀錄邏輯維持不變。
+
+
+## v13.1 急救題庫 404 修正
+- 80 題寵物急救練習題直接內建於 app.js，首頁啟動不再依賴 data/firstaid-practice.json。
+- 即使 GitHub Pages 的 data 資料夾未同步，急救每日作業仍可載入。
+- Service Worker 不再把急救 JSON 當作安裝必要檔案。
