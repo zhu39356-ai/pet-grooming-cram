@@ -1,5 +1,5 @@
-const CACHE='pet-grooming-cram-v14-0';
-const CORE=['./','./index.html','./styles.css','./app-v14.0.js?v=14.0','./manifest.webmanifest','./assets/icon.svg','./assets/q-13900-05-026.png','./data/professional-13900.json'];
+const CACHE='pet-grooming-cram-v14-1-teacher-bank';
+const CORE=['./','./index.html','./styles.css','./app-v14.1.js?v=14.1','./manifest.webmanifest','./assets/icon.svg','./assets/q-13900-05-026.png','./assets/q-90008-013.png','./assets/q-90009-002.png','./assets/q-90009-069.png','./assets/q-90009-086.png','./data/professional-13900.json','./data/common-90006-90009.json'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
