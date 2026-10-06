@@ -1,0 +1,732 @@
+{
+  "version": "v15.1",
+  "note": "只收錄 13900 題庫實際出現的產地／胸型／步態考點；答案依題庫，不額外加入百科知識。",
+  "animals": [
+    {
+      "id": "pomeranian",
+      "name": "博美犬",
+      "category": "犬類",
+      "aliases": [
+        "博美犬"
+      ],
+      "wikiTitle": "Pomeranian",
+      "origin": {
+        "value": "德國",
+        "group": "德國",
+        "sourceQuestionIds": [
+          "13900-01-002"
+        ],
+        "choices": [
+          "中國",
+          "美國",
+          "義大利",
+          "德國"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ca/Pomeranian.JPG/330px-Pomeranian.JPG",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Pomeranian.JPG"
+    },
+    {
+      "id": "pug",
+      "name": "巴哥犬",
+      "category": "犬類",
+      "aliases": [
+        "巴哥犬"
+      ],
+      "wikiTitle": "Pug",
+      "origin": {
+        "value": "中國",
+        "group": "中國",
+        "sourceQuestionIds": [
+          "13900-01-003"
+        ],
+        "choices": [
+          "中國",
+          "美國",
+          "英國",
+          "德國"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f3/Mops-duke-mopszucht-vom-maegdebrunnen.jpg/330px-Mops-duke-mopszucht-vom-maegdebrunnen.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Mops-duke-mopszucht-vom-maegdebrunnen.jpg"
+    },
+    {
+      "id": "pekingese",
+      "name": "北京犬",
+      "category": "犬類",
+      "aliases": [
+        "北京犬",
+        "北京狗"
+      ],
+      "wikiTitle": "Pekingese",
+      "origin": {
+        "value": "中國",
+        "group": "中國",
+        "sourceQuestionIds": [
+          "13900-01-004"
+        ],
+        "choices": [
+          "美國",
+          "日本",
+          "西臘",
+          "中國"
+        ]
+      },
+      "gait": {
+        "value": "滾步",
+        "sourceQuestionIds": [
+          "13900-01-031"
+        ],
+        "choices": [
+          "快步",
+          "慢步",
+          "滾步",
+          "速步"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/24/1AKC_Pekingese_Dog_Show_2011.jpg/330px-1AKC_Pekingese_Dog_Show_2011.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:1AKC_Pekingese_Dog_Show_2011.jpg"
+    },
+    {
+      "id": "maltese",
+      "name": "瑪爾濟斯犬",
+      "category": "犬類",
+      "aliases": [
+        "瑪爾濟斯犬"
+      ],
+      "wikiTitle": "Maltese dog",
+      "origin": {
+        "value": "馬爾他群島",
+        "group": "馬爾他群島",
+        "sourceQuestionIds": [
+          "13900-01-005"
+        ],
+        "choices": [
+          "馬爾他群島",
+          "庫頁島",
+          "冰島",
+          "蘇格蘭"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/94/Maltese_600.jpg/330px-Maltese_600.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Maltese_600.jpg"
+    },
+    {
+      "id": "shiba",
+      "name": "柴犬",
+      "category": "犬類",
+      "aliases": [
+        "柴犬"
+      ],
+      "wikiTitle": "Shiba Inu",
+      "origin": {
+        "value": "日本",
+        "group": "日本",
+        "sourceQuestionIds": [
+          "13900-01-006"
+        ],
+        "choices": [
+          "美國",
+          "日本",
+          "英國",
+          "中國"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6b/Taka_Shiba.jpg/330px-Taka_Shiba.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Taka_Shiba.jpg"
+    },
+    {
+      "id": "cocker",
+      "name": "可卡犬",
+      "category": "犬類",
+      "aliases": [
+        "可卡犬"
+      ],
+      "wikiTitle": "English Cocker Spaniel",
+      "origin": {
+        "value": "英國",
+        "group": "英國",
+        "sourceQuestionIds": [
+          "13900-01-009"
+        ],
+        "choices": [
+          "英國",
+          "加拿大",
+          "日本",
+          "中國"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7c/%22Bill%22_-_Cocker_spaniel_anglais_2.JPG/330px-%22Bill%22_-_Cocker_spaniel_anglais_2.JPG",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:%22Bill%22_-_Cocker_spaniel_anglais_2.JPG"
+    },
+    {
+      "id": "boxer",
+      "name": "拳師犬",
+      "category": "犬類",
+      "aliases": [
+        "拳師犬"
+      ],
+      "wikiTitle": "Boxer (dog)",
+      "origin": {
+        "value": "德國",
+        "group": "德國",
+        "sourceQuestionIds": [
+          "13900-01-010"
+        ],
+        "choices": [
+          "英國",
+          "德國",
+          "加拿大",
+          "日本"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Male_fawn_Boxer_undocked.jpg/330px-Male_fawn_Boxer_undocked.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Male_fawn_Boxer_undocked.jpg"
+    },
+    {
+      "id": "old-english-sheepdog",
+      "name": "古代牧羊犬",
+      "category": "犬類",
+      "aliases": [
+        "古代牧羊犬"
+      ],
+      "wikiTitle": "Old English Sheepdog",
+      "origin": {
+        "value": "英國",
+        "group": "英國",
+        "sourceQuestionIds": [
+          "13900-01-011"
+        ],
+        "choices": [
+          "英國",
+          "德國",
+          "加拿大",
+          "瑞士"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ed/Old_English_Sheepdog_%28side%29.jpg/330px-Old_English_Sheepdog_%28side%29.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Old_English_Sheepdog_%28side%29.jpg"
+    },
+    {
+      "id": "saint-bernard",
+      "name": "聖伯那犬",
+      "category": "犬類",
+      "aliases": [
+        "聖伯那犬",
+        "聖伯納犬"
+      ],
+      "wikiTitle": "Saint Bernard (dog)",
+      "origin": {
+        "value": "瑞士",
+        "group": "瑞士",
+        "sourceQuestionIds": [
+          "13900-01-012"
+        ],
+        "choices": [
+          "英國",
+          "德國",
+          "加拿大",
+          "瑞士"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/64/Hummel_Vedor_vd_Robandahoeve.jpg/330px-Hummel_Vedor_vd_Robandahoeve.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Hummel_Vedor_vd_Robandahoeve.jpg"
+    },
+    {
+      "id": "mini-schnauzer",
+      "name": "迷你雪納瑞",
+      "category": "犬類",
+      "aliases": [
+        "迷你雪納瑞"
+      ],
+      "wikiTitle": "Miniature Schnauzer",
+      "origin": {
+        "value": "德國",
+        "group": "德國",
+        "sourceQuestionIds": [
+          "13900-01-013"
+        ],
+        "choices": [
+          "英國",
+          "德國",
+          "瑞士",
+          "美國"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/30/Miniature_Schnauzer_salt_%26_pepper_%28cropped%29.jpg/330px-Miniature_Schnauzer_salt_%26_pepper_%28cropped%29.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Miniature_Schnauzer_salt_%26_pepper_%28cropped%29.jpg"
+    },
+    {
+      "id": "beagle",
+      "name": "米格魯（Beagle）",
+      "category": "犬類",
+      "aliases": [
+        "米格魯",
+        "Beagle"
+      ],
+      "wikiTitle": "Beagle",
+      "origin": {
+        "value": "英國",
+        "group": "英國",
+        "sourceQuestionIds": [
+          "13900-01-014"
+        ],
+        "choices": [
+          "英國",
+          "德國",
+          "瑞士",
+          "美國"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/55/Beagle_600.jpg/330px-Beagle_600.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Beagle_600.jpg"
+    },
+    {
+      "id": "dachshund",
+      "name": "臘腸犬",
+      "category": "犬類",
+      "aliases": [
+        "臘腸犬"
+      ],
+      "wikiTitle": "Dachshund",
+      "origin": {
+        "value": "德國",
+        "group": "德國",
+        "sourceQuestionIds": [
+          "13900-01-015"
+        ],
+        "choices": [
+          "英國",
+          "德國",
+          "瑞士",
+          "美國"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/be/%EB%8B%A5%EC%8A%A4%ED%9B%88%ED%8A%B8%28%EB%8B%A8%EB%AA%A8%EC%A2%85%29_%28Dachshund_%28Short%29%29.jpg/330px-%EB%8B%A5%EC%8A%A4%ED%9B%88%ED%8A%B8%28%EB%8B%A8%EB%AA%A8%EC%A2%85%29_%28Dachshund_%28Short%29%29.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:%EB%8B%A5%EC%8A%A4%ED%9B%88%ED%8A%B8%28%EB%8B%A8%EB%AA%A8%EC%A2%85%29_%28Dachshund_%28Short%29%29.jpg"
+    },
+    {
+      "id": "shar-pei",
+      "name": "沙皮犬",
+      "category": "犬類",
+      "aliases": [
+        "沙皮犬"
+      ],
+      "wikiTitle": "Shar Pei",
+      "origin": {
+        "value": "中國",
+        "group": "中國",
+        "sourceQuestionIds": [
+          "13900-01-016"
+        ],
+        "choices": [
+          "美國",
+          "澳洲",
+          "日本",
+          "中國"
+        ]
+      },
+      "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/0/05/Adult_sharpei.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Adult_sharpei.jpg"
+    },
+    {
+      "id": "bernese",
+      "name": "伯恩山犬",
+      "category": "犬類",
+      "aliases": [
+        "伯恩山犬"
+      ],
+      "wikiTitle": "Bernese Mountain Dog",
+      "origin": {
+        "value": "瑞士",
+        "group": "瑞士",
+        "sourceQuestionIds": [
+          "13900-01-017"
+        ],
+        "choices": [
+          "日本",
+          "挪威",
+          "瑞士",
+          "比利時"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cc/3-BerneseMountainDogInGrass.jpg/330px-3-BerneseMountainDogInGrass.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:3-BerneseMountainDogInGrass.jpg"
+    },
+    {
+      "id": "afghan",
+      "name": "阿富汗獵犬",
+      "category": "犬類",
+      "aliases": [
+        "阿富汗獵犬"
+      ],
+      "wikiTitle": "Afghan Hound",
+      "origin": {
+        "value": "埃及",
+        "group": "埃及",
+        "sourceQuestionIds": [
+          "13900-01-018"
+        ],
+        "choices": [
+          "日本",
+          "沙烏地阿拉伯",
+          "丹麥",
+          "埃及"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e8/Afghan_dog_-_cropped.jpg/330px-Afghan_dog_-_cropped.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Afghan_dog_-_cropped.jpg"
+    },
+    {
+      "id": "dalmatian",
+      "name": "大麥町犬",
+      "category": "犬類",
+      "aliases": [
+        "大麥町犬"
+      ],
+      "wikiTitle": "Dalmatian (dog)",
+      "origin": {
+        "value": "南斯拉夫",
+        "group": "南斯拉夫",
+        "sourceQuestionIds": [
+          "13900-01-019"
+        ],
+        "choices": [
+          "南斯拉夫",
+          "匈牙利",
+          "法國",
+          "愛爾蘭"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/68/Sun_Dog_Dalmatian.jpg/330px-Sun_Dog_Dalmatian.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Sun_Dog_Dalmatian.jpg"
+    },
+    {
+      "id": "neapolitan",
+      "name": "紐波利頓犬",
+      "category": "犬類",
+      "aliases": [
+        "紐波利頓犬"
+      ],
+      "wikiTitle": "Neapolitan Mastiff",
+      "origin": {
+        "value": "義大利",
+        "group": "義大利",
+        "sourceQuestionIds": [
+          "13900-01-020"
+        ],
+        "choices": [
+          "蘇俄",
+          "埃及",
+          "義大利",
+          "西班牙"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/29/5_Year_old_male_in_Napoli_Stance_%282%29.jpg/330px-5_Year_old_male_in_Napoli_Stance_%282%29.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:5_Year_old_male_in_Napoli_Stance_%282%29.jpg"
+    },
+    {
+      "id": "bichon",
+      "name": "比熊犬",
+      "category": "犬類",
+      "aliases": [
+        "比熊犬"
+      ],
+      "wikiTitle": "Bichon Frisé",
+      "origin": {
+        "value": "法國",
+        "group": "法國",
+        "sourceQuestionIds": [
+          "13900-01-049"
+        ],
+        "choices": [
+          "法國",
+          "英國",
+          "美國",
+          "西班牙"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/93/Bichon_Fris%C3%A9_-_studdogbichon.jpg/330px-Bichon_Fris%C3%A9_-_studdogbichon.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Bichon_Fris%C3%A9_-_studdogbichon.jpg"
+    },
+    {
+      "id": "lhasa",
+      "name": "拉薩犬",
+      "category": "犬類",
+      "aliases": [
+        "拉薩犬"
+      ],
+      "wikiTitle": "Lhasa Apso",
+      "origin": {
+        "value": "西藏",
+        "group": "西藏",
+        "sourceQuestionIds": [
+          "13900-01-064"
+        ],
+        "choices": [
+          "印度",
+          "尼泊爾",
+          "不丹",
+          "西藏"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/87/Aishia.jpg/330px-Aishia.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Aishia.jpg"
+    },
+    {
+      "id": "chow",
+      "name": "鬆獅犬",
+      "category": "犬類",
+      "aliases": [
+        "鬆獅犬"
+      ],
+      "wikiTitle": "Chow Chow",
+      "origin": {
+        "value": "中國",
+        "group": "中國",
+        "sourceQuestionIds": [
+          "13900-01-065"
+        ],
+        "choices": [
+          "中國",
+          "尼泊爾",
+          "不丹",
+          "印度"
+        ]
+      },
+      "gait": {
+        "value": "步伐如竹馬、行進踏幅亦淺短",
+        "sourceQuestionIds": [
+          "13900-01-066"
+        ],
+        "choices": [
+          "步伐如竹馬、行進踏幅亦淺短",
+          "後軀角度深、踏幅亦寬",
+          "滾步",
+          "快步"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Chow-chow_in_Tallinn.JPG/330px-Chow-chow_in_Tallinn.JPG",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Chow-chow_in_Tallinn.JPG"
+    },
+    {
+      "id": "japanese-chin",
+      "name": "狆犬（Japanese Spaniel）",
+      "category": "犬類",
+      "aliases": [
+        "狆犬",
+        "Japanese Spaniel"
+      ],
+      "wikiTitle": "Japanese Chin",
+      "origin": {
+        "value": "日本",
+        "group": "日本",
+        "sourceQuestionIds": [
+          "13900-01-070"
+        ],
+        "choices": [
+          "日本",
+          "中國",
+          "韓國",
+          "印度"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9b/Chin_posing.jpg/330px-Chin_posing.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Chin_posing.jpg"
+    },
+    {
+      "id": "great-pyrenees",
+      "name": "大白熊犬",
+      "category": "犬類",
+      "aliases": [
+        "大白熊犬"
+      ],
+      "wikiTitle": "Great Pyrenees",
+      "origin": {
+        "value": "庇里牛斯山（Pyrenees）",
+        "group": "法國／西班牙交界",
+        "prompt": "原產地位於法國和西班牙交界的哪座山？",
+        "sourceQuestionIds": [
+          "13900-01-074"
+        ],
+        "choices": [
+          "高加索山",
+          "本寧山",
+          "庇里牛斯山（Pyrenees）",
+          "烏拉山"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Great_Pyrenees_Mountain_Dog_2.png/330px-Great_Pyrenees_Mountain_Dog_2.png",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Great_Pyrenees_Mountain_Dog_2.png"
+    },
+    {
+      "id": "golden-hamster",
+      "name": "黃金鼠",
+      "category": "鼠類／其他",
+      "aliases": [
+        "黃金鼠"
+      ],
+      "wikiTitle": "Golden hamster",
+      "origin": {
+        "value": "敘利亞",
+        "group": "敘利亞",
+        "sourceQuestionIds": [
+          "13900-01-091"
+        ],
+        "choices": [
+          "敘利亞",
+          "蒙古",
+          "西伯利亞",
+          "祕魯"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6b/Golden_hamster_front_1.jpg/330px-Golden_hamster_front_1.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Golden_hamster_front_1.jpg"
+    },
+    {
+      "id": "guinea-pig",
+      "name": "天竺鼠",
+      "category": "鼠類／其他",
+      "aliases": [
+        "天竺鼠"
+      ],
+      "wikiTitle": "Guinea pig",
+      "origin": {
+        "value": "祕魯",
+        "group": "祕魯",
+        "sourceQuestionIds": [
+          "13900-01-105"
+        ],
+        "choices": [
+          "敘利亞",
+          "蒙古",
+          "西伯利亞",
+          "祕魯"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/30/George_the_amazing_guinea_pig.jpg/330px-George_the_amazing_guinea_pig.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:George_the_amazing_guinea_pig.jpg"
+    },
+    {
+      "id": "poodle",
+      "name": "貴賓犬",
+      "category": "犬類",
+      "aliases": [
+        "貴賓犬"
+      ],
+      "wikiTitle": "Poodle",
+      "gait": {
+        "value": "快步",
+        "sourceQuestionIds": [
+          "13900-01-034"
+        ],
+        "choices": [
+          "快步",
+          "慢步",
+          "滾步",
+          "交叉步"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f8/Full_attention_%288067543690%29.jpg/330px-Full_attention_%288067543690%29.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Full_attention_%288067543690%29.jpg"
+    },
+    {
+      "id": "shih-tzu",
+      "name": "西施犬",
+      "category": "犬類",
+      "aliases": [
+        "西施犬"
+      ],
+      "wikiTitle": "Shih Tzu",
+      "gait": {
+        "value": "滾步",
+        "sourceQuestionIds": [
+          "13900-01-035"
+        ],
+        "choices": [
+          "快步",
+          "慢步",
+          "滾步",
+          "交叉步"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Shihtzu_%28cropped%29.jpg/330px-Shihtzu_%28cropped%29.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Shihtzu_%28cropped%29.jpg"
+    },
+    {
+      "id": "bulldog",
+      "name": "鬥牛犬",
+      "category": "犬類",
+      "aliases": [
+        "鬥牛犬"
+      ],
+      "wikiTitle": "Bulldog",
+      "chest": {
+        "value": "桶狀胸型",
+        "sourceQuestionIds": [
+          "13900-01-037"
+        ],
+        "choices": [
+          "桶狀胸型",
+          "船底胸型",
+          "扁平胸型"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a3/Whitebulldog.jpg/330px-Whitebulldog.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Whitebulldog.jpg"
+    },
+    {
+      "id": "german-shepherd",
+      "name": "狼犬",
+      "category": "犬類",
+      "aliases": [
+        "狼犬"
+      ],
+      "wikiTitle": "German Shepherd",
+      "chest": {
+        "value": "船底胸型",
+        "sourceQuestionIds": [
+          "13900-01-038"
+        ],
+        "choices": [
+          "桶狀胸型",
+          "船底胸型",
+          "扁平胸型"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d0/German_Shepherd_-_DSC_0346_%2810096362833%29.jpg/330px-German_Shepherd_-_DSC_0346_%2810096362833%29.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:German_Shepherd_-_DSC_0346_%2810096362833%29.jpg"
+    },
+    {
+      "id": "greyhound",
+      "name": "埃及跑犬（灰狗）",
+      "category": "犬類",
+      "aliases": [
+        "埃及跑犬",
+        "灰狗"
+      ],
+      "wikiTitle": "Greyhound",
+      "chest": {
+        "value": "扁平胸型",
+        "sourceQuestionIds": [
+          "13900-01-039"
+        ],
+        "choices": [
+          "桶狀胸型",
+          "船底胸型",
+          "扁平胸型"
+        ]
+      },
+      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/ef/GraceTheGreyhound.jpg/330px-GraceTheGreyhound.jpg",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:GraceTheGreyhound.jpg"
+    }
+  ],
+  "generalNotes": {
+    "chest": [
+      {
+        "text": "世界上常見犬種以「船底胸型」最為普遍",
+        "sourceQuestionId": "13900-01-036"
+      }
+    ]
+  }
+}
