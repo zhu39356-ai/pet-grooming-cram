@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#6b5cff" />
-  <meta name="description" content="13900 寵物美容丙級與寵物急救：循環不重複刷題、錯題複習與模擬考 PWA" />
+  <meta name="description" content="13900 寵物美容丙級與寵物急救：共同科目不限題數、錯題複習、動物考點速記與模擬考 PWA" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./assets/icon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="./styles.css" />
@@ -13,7 +13,7 @@
 <body>
   <header class="topbar">
     <div>
-      <div class="eyebrow">13900 寵物美容丙級 · 寵物急救 · v14.1</div>
+      <div class="eyebrow">13900 寵物美容丙級 · 寵物急救 · v15.1</div>
       <h1>我的刷題 PWA</h1>
     </div>
     <button id="installBtn" class="ghost small" hidden>安裝到手機</button>
@@ -22,7 +22,7 @@
   <main id="app" class="app-shell">
     <section id="view-home" class="view active">
       <div class="card" id="bootFallback">
-        <h3>v14.1 正在開啟題庫…</h3>
+        <h3>v15.1 正在開啟題庫…</h3>
         <p class="muted small-text">如果這段文字一直沒有消失，代表 JavaScript 沒有成功載入；請把畫面截圖給我，不要刪除學習資料。</p>
       </div>
     </section>
@@ -48,7 +48,7 @@
         <div><div class="eyebrow">QUESTION BANK</div><h2>題庫同步／更新</h2></div>
         <button value="cancel" class="icon-btn" aria-label="關閉">×</button>
       </div>
-      <p class="muted">美容專業 647 題與寵物急救 80 題已直接內建；兩套每日作業完全分開。共同科目已改為老師提供的官方版本，會隨本版自動載入，供每日刷題、自由刷題與丙級模考。學習紀錄保存在本機，可離線使用。</p>
+      <p class="muted">美容專業 647 題與寵物急救 80 題已直接內建。共同科目採老師提供的官方版本，第一輪不限每日題數、優先補完未做題，錯題可跨日累積；另新增題庫限定的動物產地／胸型／步態速記。學習紀錄保存在本機。</p>
       <div id="syncStatus" class="sync-status"></div>
       <div class="stack">
         <button type="button" id="autoSyncBtn" class="primary">同步全部題庫</button>
@@ -74,6 +74,6 @@
   </dialog>
 
   <div id="toast" role="status" aria-live="polite"></div>
-  <script defer src="./app-v14.1.js?v=14.1"></script>
+  <script defer src="./app-v15.1.js?v=15.1"></script>
 </body>
 </html>
