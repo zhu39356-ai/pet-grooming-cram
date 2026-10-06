@@ -1,6 +1,6 @@
 {
-  "version": "v15.1",
-  "note": "只收錄 13900 題庫實際出現的產地／胸型／步態考點；答案依題庫，不額外加入百科知識。",
+  "version": "15.2.1",
+  "note": "v15.2.1 圖片小測驗修正：更換紐波利頓犬、拉薩犬主圖。",
   "animals": [
     {
       "id": "pomeranian",
@@ -422,8 +422,8 @@
           "西班牙"
         ]
       },
-      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/29/5_Year_old_male_in_Napoli_Stance_%282%29.jpg/330px-5_Year_old_male_in_Napoli_Stance_%282%29.jpg",
-      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:5_Year_old_male_in_Napoli_Stance_%282%29.jpg"
+      "imageUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/DocFile%20Napoli.jpg?width=330",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:DocFile_Napoli.jpg"
     },
     {
       "id": "bichon",
@@ -470,8 +470,8 @@
           "西藏"
         ]
       },
-      "imageUrl": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/87/Aishia.jpg/330px-Aishia.jpg",
-      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Aishia.jpg"
+      "imageUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Lhasaapso.jpg?width=330",
+      "imageSourceUrl": "https://commons.wikimedia.org/wiki/File:Lhasaapso.jpg"
     },
     {
       "id": "chow",
