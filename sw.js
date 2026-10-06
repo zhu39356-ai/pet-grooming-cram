@@ -1,7 +1,7 @@
-const CACHE='pet-grooming-cram-v15-1';
+const CACHE='pet-grooming-cram-v15-2';
 const BANK_CACHE='pet-grooming-bank-stable-v1';
 const IMAGE_CACHE='pet-grooming-animal-images-v1';
-const CRITICAL=['./','./index.html','./styles.css','./app-v15.1.js?v=15.1','./manifest.webmanifest','./assets/icon.svg'];
+const CRITICAL=['./','./index.html','./styles.css','./app-v15.2.js?v=15.2','./manifest.webmanifest','./assets/icon.svg'];
 const BANK_FILES=['./data/professional-13900.json','./data/common-90006-90009.json','./data/firstaid-practice.json','./data/animal-study.json'];
 const OPTIONAL=['./assets/q-13900-05-026.png','./assets/q-90008-013.png','./assets/q-90009-002.png','./assets/q-90009-069.png','./assets/q-90009-086.png'];
 
